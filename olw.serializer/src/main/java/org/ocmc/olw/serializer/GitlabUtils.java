@@ -225,7 +225,37 @@ public class GitlabUtils {
 		return result.toString();
 	}
 	
+	public static String gitCommitPush(
+			String dir
+			, String user
+			, String project
+			, String filter
+			, String msg
+			) {
+		StringBuffer result = new StringBuffer();
+		result.append(gitCommit(dir,user,project,msg));
+		result.append("\n");
+		result.append(gitPush(dir,project));
+		result.append("\n");
+		return result.toString();
+	}
+	
 	public String addCommitPushAllProjects(
+			String dir
+			, String msg
+			) {
+		StringBuffer result = new StringBuffer();
+		for (GitLabProject p : this.projectsMap.values()) {
+			result.append("Push for ");
+			result.append(p.getName());
+			result.append(": ");
+			result.append(GitlabUtils.gitAddCommitPush(dir, "olwsys", p.getName(), ".", msg));
+			result.append("\n");
+		}
+		return result.toString();
+	}
+
+	public String commitPushAllProjects(
 			String dir
 			, String msg
 			) {

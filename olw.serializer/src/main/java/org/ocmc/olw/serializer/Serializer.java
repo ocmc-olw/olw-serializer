@@ -202,11 +202,12 @@ public class Serializer implements Runnable {
 							processed++;
 							String out = this.gitPath + Constants.PROJECT_DB2JSON_NODES + "/" + library + "/" + path;
 							FileUtils.write(new File(out),topics.getValuesAsJsonArray().toString());
+							GitlabUtils.gitAdd(this.gitPath, Constants.PROJECT_DB2JSON_NODES, out);
 							if (this.debugEnabled) {
 								logger.info(Instant.now().toString() + " " + processed + " of " + total + " - " + out);
 							}
 						}
-						String pushResult = this.gitUtils.addCommitPushAllProjects(this.gitPath, "Serializer:db2json:nodes:" + library + "." + Instant.now().toString());
+						String pushResult = this.gitUtils.commitPushAllProjects(this.gitPath, "Serializer:db2json:nodes:" + library + "." + Instant.now().toString());
 					}
 				} catch (Exception e) {
 					System.out.println(o.toString());
@@ -263,11 +264,12 @@ public class Serializer implements Runnable {
 					String out = this.gitPath + Constants.PROJECT_DB2JSON_LINKS + "/" + parts[0] + "/" + parts[1] + ".json";
 					try {
 						FileUtils.write(new File(out),result.getValuesAsJsonArray().toString());
+						GitlabUtils.gitAdd(this.gitPath, Constants.PROJECT_DB2JSON_LINKS, out);
 					} catch (Exception e) {
 						ErrorUtils.report(logger, e);
 					}
 				}
-				String pushResult = this.gitUtils.addCommitPushAllProjects(this.gitPath, "Serializer:db2json:links:" + libType + "." + Instant.now().toString());
+				String pushResult = this.gitUtils.commitPushAllProjects(this.gitPath, "Serializer:db2json:links:" + libType + "." + Instant.now().toString());
 			}
 			
 	}
@@ -292,11 +294,12 @@ public class Serializer implements Runnable {
 						for (JsonObject p : result.getValues()) {
 							if (p != null && p.has("props"))  {
 								JsonObject props = p.get("props").getAsJsonObject();
-								String out = this.gitPath + Constants.PROJECT_DB2JSON_LINK_NODES + "/" + type + ".json";
+								String out = this.gitPath + Constants.PROJECT_DB2JSON_LINK_PROPS + "/" + type + ".json";
 								FileUtils.write(new File(out),props.toString());
+								GitlabUtils.gitAdd(this.gitPath, Constants.PROJECT_DB2JSON_LINK_PROPS, out);
 							}
 						}
-						String pushResult = this.gitUtils.addCommitPushAllProjects(this.gitPath, "Serializer:db2json:linkprops:" + type + "." + Instant.now().toString());
+						String pushResult = this.gitUtils.commitPushAllProjects(this.gitPath, "Serializer:db2json:linkprops:" + type + "." + Instant.now().toString());
 					}
 				} catch (Exception e) {
 					ErrorUtils.report(logger, e);
@@ -371,12 +374,13 @@ public class Serializer implements Runnable {
 							topicPath = topicPath.replaceAll("\\.", "/");
 							String out = this.gitPath + Constants.PROJECT_DB2ARES + "/" + library + "/" + topicPath + "/" + agesResource + ".ares";
 							FileUtils.write(new File(out), sb.toString());
+							GitlabUtils.gitAdd(this.gitPath, Constants.PROJECT_DB2ARES, out);
 							if (this.debugEnabled) {
 								logger.info(Instant.now().toString() + " wrote " + out);
 							}
 						}
 					}
-					String pushResult = this.gitUtils.addCommitPushAllProjects(this.gitPath, "Serializer:db2ares:" + library + "." + Instant.now().toString());
+					String pushResult = this.gitUtils.commitPushAllProjects(this.gitPath, "Serializer:db2ares:" + library + "." + Instant.now().toString());
 					processed++;
 					logger.info(Instant.now().toString() + " processed " + library + " " + processed + " of " + total + " libraries.");
 				}
