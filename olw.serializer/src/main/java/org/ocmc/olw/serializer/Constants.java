@@ -1,7 +1,7 @@
 package org.ocmc.olw.serializer;
 
 public class Constants {
-	public static String VERSION = "2018.08.31.1";
+	public static String VERSION = "2018.08.31.2";
 	public static final String PROJECT_DB2ARES = "db2ares";
 	public static final String PROJECT_DB2JSON = "db2json";
 	public static final String PROJECT_DB2JSON_NODES = PROJECT_DB2JSON + "/nodes";

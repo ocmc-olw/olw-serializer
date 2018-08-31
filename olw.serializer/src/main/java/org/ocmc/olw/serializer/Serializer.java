@@ -206,6 +206,7 @@ public class Serializer implements Runnable {
 								logger.info(Instant.now().toString() + " " + processed + " of " + total + " - " + out);
 							}
 						}
+						String pushResult = this.gitUtils.addCommitPushAllProjects(this.gitPath, "Serializer:db2json:nodes:" + library + "." + Instant.now().toString());
 					}
 				} catch (Exception e) {
 					System.out.println(o.toString());
@@ -266,6 +267,7 @@ public class Serializer implements Runnable {
 						ErrorUtils.report(logger, e);
 					}
 				}
+				String pushResult = this.gitUtils.addCommitPushAllProjects(this.gitPath, "Serializer:db2json:links:" + libType + "." + Instant.now().toString());
 			}
 			
 	}
@@ -294,6 +296,7 @@ public class Serializer implements Runnable {
 								FileUtils.write(new File(out),props.toString());
 							}
 						}
+						String pushResult = this.gitUtils.addCommitPushAllProjects(this.gitPath, "Serializer:db2json:linkprops:" + type + "." + Instant.now().toString());
 					}
 				} catch (Exception e) {
 					ErrorUtils.report(logger, e);
@@ -373,6 +376,7 @@ public class Serializer implements Runnable {
 							}
 						}
 					}
+					String pushResult = this.gitUtils.addCommitPushAllProjects(this.gitPath, "Serializer:db2ares:" + library + "." + Instant.now().toString());
 					processed++;
 					logger.info(Instant.now().toString() + " processed " + library + " " + processed + " of " + total + " libraries.");
 				}
