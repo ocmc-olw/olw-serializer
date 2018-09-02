@@ -6,7 +6,7 @@ import java.net.HttpURLConnection;
 import java.net.URL;
 import java.net.URLEncoder;
 
-import org.ocmc.olw.serializer.models.GitLabProject;
+import org.ocmc.olw.serializer.models.GitlabProject;
 
 import com.google.gson.Gson;
 import com.google.gson.JsonObject;
@@ -39,7 +39,7 @@ public class RestTest2 {
             Gson gson = new Gson();
             JsonParser parser = new JsonParser();
             JsonObject user = (JsonObject) parser.parse(apiOutput);
-            GitLabProject p = gson.fromJson(apiOutput, GitLabProject.class);
+            GitlabProject p = gson.fromJson(apiOutput, GitlabProject.class);
             p.setPrettyPrint(true);
             System.out.println(user.toString());
             System.out.println(p.toJsonString());

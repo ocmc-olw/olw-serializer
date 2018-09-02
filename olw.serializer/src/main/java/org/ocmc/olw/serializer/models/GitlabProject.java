@@ -7,7 +7,7 @@ import org.ocmc.ioc.liturgical.schemas.models.supers.AbstractModel;
 
 import com.google.gson.annotations.Expose;
 
-public class GitLabProject extends AbstractModel {
+public class GitlabProject extends AbstractModel {
 	@Expose public String ssh_url_to_repo = ""; // "git@gitlab.liml.org:olwsys/db2json.git"
 	@Expose public String path_with_namespace = ""; // "olwsys/db2json"
 	@Expose public String description = ""; // "Dump of Neo4j nodes ....

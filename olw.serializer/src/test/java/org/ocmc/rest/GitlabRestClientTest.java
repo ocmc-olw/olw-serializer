@@ -2,6 +2,9 @@ package org.ocmc.rest;
 
 import static org.junit.Assert.*;
 
+import java.util.Map;
+import java.util.TreeMap;
+
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
@@ -32,15 +35,17 @@ public class GitlabRestClientTest {
 	}
 	@Test
 	public void testGetGroupSerializedDb2JsonNodes() {
-		RestClient rc = new RestClient(GitlabRestClientTest.url, GitlabRestClientTest.token);
-		ResultJsonObjectArray result = rc.get(
-				RestClient.TOPICS.groups
-				, "serialized/db2json/nodes"
-				, ""
-				);
-		result.setPrettyPrint(true);
-		System.out.println(result.toJsonString());
-		assertTrue(result.getStatus().code == HTTP_RESPONSE_CODES.OK.code);
+		try {
+			GitlabRestClient rc = new GitlabRestClient(GitlabRestClientTest.url, GitlabRestClientTest.token);
+			ResultJsonObjectArray result = rc.getGroup(
+					"serialized/db2json/nodes"
+					);
+			result.setPrettyPrint(true);
+			System.out.println(result.toJsonString());
+			assertTrue(result.getStatus().code == HTTP_RESPONSE_CODES.OK.code);
+		} catch (Exception e) {
+			fail(e.getMessage());
+		}
 	}
 
 	

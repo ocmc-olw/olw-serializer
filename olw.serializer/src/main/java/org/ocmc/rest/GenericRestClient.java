@@ -5,9 +5,15 @@ import java.io.InputStreamReader;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.net.URLEncoder;
+import java.util.Map;
+import java.util.TreeMap;
 
 import org.ocmc.ioc.liturgical.schemas.constants.HTTP_RESPONSE_CODES;
 import org.ocmc.ioc.liturgical.schemas.models.ws.response.ResultJsonObjectArray;
+import org.ocmc.ioc.liturgical.utils.ErrorUtils;
+import org.ocmc.olw.serializer.models.GitlabProject;
+import org.ocmc.olw.serializer.GitlabUtils;
+import org.ocmc.olw.serializer.models.GitlabGroup;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -15,14 +21,15 @@ import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
+import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 
 public class GenericRestClient {
 	// TODO rework this to provide a builder with dot add ons
 	// TODO implement PUT
 	private static final Logger logger = LoggerFactory.getLogger(GenericRestClient.class);
-	private static Gson gson = new GsonBuilder().setPrettyPrinting().disableHtmlEscaping().create();
-	private static JsonParser parser = new JsonParser();
+	protected static Gson gson = new GsonBuilder().setPrettyPrinting().disableHtmlEscaping().create();
+	protected static JsonParser parser = new JsonParser();
 	public static enum METHODS  {GET, POST, PUT, DELETE};
 	private String token = "";
     private String apiUrl = "";
@@ -32,9 +39,10 @@ public class GenericRestClient {
     	try {
         	this.apiUrl = url;
     	} catch (Exception e) {
-    		
+    		ErrorUtils.report(logger, e);
     	}
     }
+    
     
     public ResultJsonObjectArray get(String topic) {
     	return this.request(METHODS.GET, topic, "", "");

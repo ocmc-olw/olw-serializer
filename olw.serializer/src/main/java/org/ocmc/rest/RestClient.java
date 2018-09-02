@@ -26,8 +26,11 @@ public class RestClient {
 	private String token = "";
     private String apiUrl = "";
 
-    public RestClient(String url, String token) {
+    public RestClient(String url, String token) throws TokenException {
     	this.token = token;
+    	if (token == null) {
+    		throw new TokenException("Token cannot be null");
+    	}
     	try {
         	this.apiUrl = url;
     	} catch (Exception e) {
@@ -94,7 +97,8 @@ public class RestClient {
             conn.setRequestProperty("Private-Token", this.token);
             conn.setConnectTimeout(0);
             int responseCode = conn.getResponseCode();
-            result.setStatusCode(responseCode);
+            String responseMessage = conn.getResponseMessage();
+            result.setStatusCode(conn.getResponseCode());
             result.setStatusMessage(conn.getResponseMessage());
             switch (method) {
 			case DELETE:

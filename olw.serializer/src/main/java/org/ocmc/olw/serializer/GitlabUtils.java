@@ -16,7 +16,7 @@ import org.ocmc.ioc.liturgical.schemas.constants.HTTP_RESPONSE_CODES;
 import org.ocmc.ioc.liturgical.schemas.models.supers.AbstractModel;
 import org.ocmc.ioc.liturgical.schemas.models.ws.response.ResultJsonObjectArray;
 import org.ocmc.ioc.liturgical.utils.ErrorUtils;
-import org.ocmc.olw.serializer.models.GitLabProject;
+import org.ocmc.olw.serializer.models.GitlabProject;
 import org.ocmc.olw.serializer.models.GitlabGroup;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -58,7 +58,7 @@ public class GitlabUtils {
 	private String apiProjects = "";
 	private String privateToken = "?private_token=";
 	private Map<String,GitlabGroup> groupsMap = new TreeMap<String,GitlabGroup>(); // key = group path
-	private Map<String,GitLabProject> projectsMap = new TreeMap<String,GitLabProject>(); // key = project path with namespace
+	private Map<String,GitlabProject> projectsMap = new TreeMap<String,GitlabProject>(); // key = project path with namespace
 	
 	public GitlabUtils(String domain, String token) {
 		this.domain = domain;
@@ -75,7 +75,7 @@ public class GitlabUtils {
 	 * and the https url as the value.
 	 * @return the map
 	 */
-	public Map<String,GitLabProject> getProjectsMap() {
+	public Map<String,GitlabProject> getProjectsMap() {
 		return this.projectsMap;
 	}
 	
@@ -87,7 +87,7 @@ public class GitlabUtils {
 		}
 		queryResult = this.getProjects();
 		for (JsonObject o : queryResult.values) {
-			GitLabProject p = GitlabUtils.gson.fromJson(o.toString(), GitLabProject.class);
+			GitlabProject p = GitlabUtils.gson.fromJson(o.toString(), GitlabProject.class);
 			this.projectsMap.put(p.getPath_with_namespace(), p);
 		}
 	}
@@ -96,7 +96,7 @@ public class GitlabUtils {
 		String url = this.apiProjects + "/";
 		try {
 			url = url + URLEncoder.encode(project, "UTF-8");
-			ResultJsonObjectArray qResult = get(url, GitLabProject.class);
+			ResultJsonObjectArray qResult = get(url, GitlabProject.class);
 			if (qResult.getStatus().getCode() == 200) {
 				return true;
 			} else {
@@ -273,7 +273,7 @@ public class GitlabUtils {
 			, String msg
 			) {
 		StringBuffer result = new StringBuffer();
-		for (GitLabProject p : this.projectsMap.values()) {
+		for (GitlabProject p : this.projectsMap.values()) {
 			result.append("Push for ");
 			result.append(p.getName());
 			result.append(": ");
@@ -288,7 +288,7 @@ public class GitlabUtils {
 			, String msg
 			) {
 		StringBuffer result = new StringBuffer();
-		for (GitLabProject p : this.projectsMap.values()) {
+		for (GitlabProject p : this.projectsMap.values()) {
 			result.append("Push for ");
 			result.append(p.getName());
 			result.append(": ");
@@ -390,7 +390,7 @@ public class GitlabUtils {
 		try {
 			result = postAsJson(this.apiProjects + "/?name=" + URLEncoder.encode(name, "UTF-8"));
 			JsonObject o = result.getFirstObject().get("node").getAsJsonObject();
-			GitLabProject p = GitlabUtils.gson.fromJson(o.toString(), GitLabProject.class);
+			GitlabProject p = GitlabUtils.gson.fromJson(o.toString(), GitlabProject.class);
 			this.projectsMap.put(name, p);
 		} catch (Exception e) {
 			ErrorUtils.report(logger, e);
@@ -406,7 +406,7 @@ public class GitlabUtils {
 				result = postAsJson(this.apiProjects + "/?namespace_id=" + groupId + "&name=" + URLEncoder.encode(name, "UTF-8"));
 				if (result.getStatus().code == 200) {
 					JsonObject o = result.getFirstObject().get("node").getAsJsonObject();
-					GitLabProject p = GitlabUtils.gson.fromJson(o.toString(), GitLabProject.class);
+					GitlabProject p = GitlabUtils.gson.fromJson(o.toString(), GitlabProject.class);
 					this.projectsMap.put(p.getPath_with_namespace(), p);
 				} else {
 					logger.error("Could not create project " + group + "/" + name + ": " + result.getStatus().code + " - " + result.getStatus().getDeveloperMessage());
@@ -433,7 +433,7 @@ public class GitlabUtils {
 		// create a new list because each delete will remove the project 
 		// from the project map.
 		List<String> names = new ArrayList<String>();
-		for (GitLabProject p : this.projectsMap.values()) {
+		for (GitlabProject p : this.projectsMap.values()) {
 			names.add(p.getPath_with_namespace());
 		}
 		for (String name : names) {
@@ -465,7 +465,7 @@ public class GitlabUtils {
 	}
 	
 	public ResultJsonObjectArray getProjects() {
-		ResultJsonObjectArray result = get(this.apiProjects, GitLabProject.class);
+		ResultJsonObjectArray result = get(this.apiProjects, GitlabProject.class);
 		return result;
 	}
 	
@@ -478,7 +478,7 @@ public class GitlabUtils {
 	
 	public ResultJsonObjectArray getProjectsForUser(String user) {
 		//GET /users/:user_id/projects
-		ResultJsonObjectArray result = get(this.host + "users/"+ user + "/projects", GitLabProject.class);
+		ResultJsonObjectArray result = get(this.host + "users/"+ user + "/projects", GitlabProject.class);
 		return result;
 	}
 	

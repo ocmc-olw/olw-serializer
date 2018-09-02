@@ -20,15 +20,19 @@ public class RestClientTest {
 
 	@Test
 	public void testGetGroupSerializedDb2JsonNodes() {
-		RestClient rc = new RestClient(RestClientTest.url, RestClientTest.token);
-		ResultJsonObjectArray result = rc.get(
-				RestClient.TOPICS.groups
-				, "serialized/db2json/nodes"
-				, ""
-				);
-		result.setPrettyPrint(true);
-		System.out.println(result.toJsonString());
-		assertTrue(result.getStatus().code == HTTP_RESPONSE_CODES.OK.code);
+		try {
+			RestClient rc = new RestClient(RestClientTest.url, RestClientTest.token);
+			ResultJsonObjectArray result = rc.get(
+					RestClient.TOPICS.groups
+					, "serialized/db2json/nodes"
+					, ""
+					);
+			result.setPrettyPrint(true);
+			System.out.println(result.toJsonString());
+			assertTrue(result.getStatus().code == HTTP_RESPONSE_CODES.OK.code);
+		} catch (Exception e) {
+			fail(e.getMessage());
+		}
 	}
 
 }
