@@ -4,6 +4,9 @@ import java.io.BufferedReader;
 import java.io.File;
 import java.io.InputStream;
 import java.io.InputStreamReader;
+import java.io.UnsupportedEncodingException;
+import java.net.URLEncoder;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.TreeMap;
@@ -14,6 +17,7 @@ import org.ocmc.ioc.liturgical.schemas.models.supers.AbstractModel;
 import org.ocmc.ioc.liturgical.schemas.models.ws.response.ResultJsonObjectArray;
 import org.ocmc.ioc.liturgical.utils.ErrorUtils;
 import org.ocmc.olw.serializer.models.GitLabProject;
+import org.ocmc.olw.serializer.models.GitlabGroup;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -50,17 +54,20 @@ public class GitlabUtils {
 	private String domain = "";
 	private String token = "";
 	private String host = "";
+	private String apiGroups = "";
 	private String apiProjects = "";
 	private String privateToken = "?private_token=";
-	private Map<String,GitLabProject> projectsMap = new TreeMap<String,GitLabProject>();
+	private Map<String,GitlabGroup> groupsMap = new TreeMap<String,GitlabGroup>(); // key = group path
+	private Map<String,GitLabProject> projectsMap = new TreeMap<String,GitLabProject>(); // key = project path with namespace
 	
 	public GitlabUtils(String domain, String token) {
 		this.domain = domain;
 		this.token = token;
 		this.privateToken = privateToken + token;
 		this.host = "https://" + domain + "/api/v4/";
+		this.apiGroups = this.host + "groups";
 		this.apiProjects = this.host + "projects";
-		this.createProjectsMap();
+		this.createMaps();
 	}
 	
 	/**
@@ -72,15 +79,35 @@ public class GitlabUtils {
 		return this.projectsMap;
 	}
 	
-	private void createProjectsMap() {
-			ResultJsonObjectArray queryResult = get(this.apiProjects, GitLabProject.class);
-			for (JsonObject o : queryResult.values) {
-				GitLabProject p = GitlabUtils.gson.fromJson(o.toString(), GitLabProject.class);
-				this.projectsMap.put(p.getName(), p);
-			}
+	private void createMaps() {
+		ResultJsonObjectArray queryResult = this.getGroups();
+		for (JsonObject o : queryResult.values) {
+			GitlabGroup p = GitlabUtils.gson.fromJson(o.toString(), GitlabGroup.class);
+			this.groupsMap.put(p.getFull_path(), p);
+		}
+		queryResult = this.getProjects();
+		for (JsonObject o : queryResult.values) {
+			GitLabProject p = GitlabUtils.gson.fromJson(o.toString(), GitLabProject.class);
+			this.projectsMap.put(p.getPath_with_namespace(), p);
+		}
 	}
 	
-	public boolean existsProject(String project) {
+	public boolean existsProjectOnServer(String project) {
+		String url = this.apiProjects + "/";
+		try {
+			url = url + URLEncoder.encode(project, "UTF-8");
+			ResultJsonObjectArray qResult = get(url, GitLabProject.class);
+			if (qResult.getStatus().getCode() == 200) {
+				return true;
+			} else {
+				return false;
+			}
+		} catch (UnsupportedEncodingException e) {
+			return false;
+		}
+	}
+
+	public boolean existsProjectInMap(String project) {
 		return this.projectsMap.containsKey(project);
 	}
 	
@@ -97,7 +124,7 @@ public class GitlabUtils {
 		// check for existence of all listed projects on Gitlab server.
 		// If missing, create it on server
 		for (String project : list) {
-			if (! this.existsProject(project)) { // create it
+			if (! this.existsProjectInMap(project)) { // create it
 				this.createProject(project);
 			}
 		}
@@ -126,6 +153,7 @@ public class GitlabUtils {
 			) {
 		StringBuffer result = new StringBuffer();
 		try {
+			//https://gitlab.liml.org/serialized/db2ares/en_uk_tfm.git
 			StringBuffer url = new StringBuffer();
 			url.append("https://ioauth2:");
 			url.append(token);
@@ -358,13 +386,37 @@ public class GitlabUtils {
 	}
 	
 	public ResultJsonObjectArray createProject(String name) {
-		ResultJsonObjectArray result = postAsJson(this.apiProjects + "/?name=" + name);
+		ResultJsonObjectArray result = new ResultJsonObjectArray(false);
 		try {
+			result = postAsJson(this.apiProjects + "/?name=" + URLEncoder.encode(name, "UTF-8"));
 			JsonObject o = result.getFirstObject().get("node").getAsJsonObject();
 			GitLabProject p = GitlabUtils.gson.fromJson(o.toString(), GitLabProject.class);
 			this.projectsMap.put(name, p);
 		} catch (Exception e) {
 			ErrorUtils.report(logger, e);
+		}
+		return result;
+	}
+	
+	public ResultJsonObjectArray createProjectInGroup(String group, String name) {
+		ResultJsonObjectArray result = new ResultJsonObjectArray(false);
+		if (this.groupsMap.containsKey(group)) {
+			try {
+				int groupId = this.groupsMap.get(group).id;
+				result = postAsJson(this.apiProjects + "/?namespace_id=" + groupId + "&name=" + URLEncoder.encode(name, "UTF-8"));
+				if (result.getStatus().code == 200) {
+					JsonObject o = result.getFirstObject().get("node").getAsJsonObject();
+					GitLabProject p = GitlabUtils.gson.fromJson(o.toString(), GitLabProject.class);
+					this.projectsMap.put(p.getPath_with_namespace(), p);
+				} else {
+					logger.error("Could not create project " + group + "/" + name + ": " + result.getStatus().code + " - " + result.getStatus().getDeveloperMessage());
+				}
+			} catch (Exception e) {
+				ErrorUtils.report(logger, e);
+			}
+		} else {
+			result.setStatusCode(HTTP_RESPONSE_CODES.NOT_FOUND.code);
+			result.setStatusUserMessage(HTTP_RESPONSE_CODES.NOT_FOUND.message + " " + group);
 		}
 		return result;
 	}
@@ -377,11 +429,34 @@ public class GitlabUtils {
 		}
 	}
 	
+	public void deleteAllProjects() {
+		// create a new list because each delete will remove the project 
+		// from the project map.
+		List<String> names = new ArrayList<String>();
+		for (GitLabProject p : this.projectsMap.values()) {
+			names.add(p.getPath_with_namespace());
+		}
+		for (String name : names) {
+			try {
+				this.deleteProject(name);
+				Thread.sleep(1000); // if send too quickly says OK but doesn't delete
+			} catch (InterruptedException e) {
+				e.printStackTrace();
+			}
+		}
+	}
+	
 	public ResultJsonObjectArray deleteProject(String name) {
 		String id = this.getIdForProject(name);
 		ResultJsonObjectArray result = new ResultJsonObjectArray(false);
 		if (id.length() > 0) {
 			result = deleteAsJson(this.apiProjects + "/" + id);
+			if (result.getStatus().getCode() == 202) {
+				this.projectsMap.remove(name);
+				logger.info("Deleted Gitlab project " + name);
+			} else {
+				logger.error("Error deleting Gitlab project " + name + " " + result.getStatus().developerMessage);
+			}
 		} else {
 			result.setStatusCode(HTTP_RESPONSE_CODES.NOT_FOUND.code);
 			result.setStatusMessage(HTTP_RESPONSE_CODES.NOT_FOUND.message);
@@ -391,6 +466,12 @@ public class GitlabUtils {
 	
 	public ResultJsonObjectArray getProjects() {
 		ResultJsonObjectArray result = get(this.apiProjects, GitLabProject.class);
+		return result;
+	}
+	
+	///groups
+	public ResultJsonObjectArray getGroups() {
+		ResultJsonObjectArray result = get(this.apiGroups, GitlabGroup.class);
 		return result;
 	}
 	
@@ -485,15 +566,35 @@ public class GitlabUtils {
 			} else {
 				privateToken = "?private_token=" + this.token + "&simple=true";
 			}
-			responseGet = Unirest.get(url + privateToken).asJson();
-			if (responseGet.getStatus() == 200) {
-				node = responseGet.getBody();
-				je = parser.parse(node.toString());
-				o.add("node", je);
-				result.addValue(o);
-			} else {
-				result.getStatus().code = responseGet.getStatus();
-				result.getStatus().setMessage(responseGet.getStatusText());
+			boolean hasNextPage = true;
+			int pageNbr = 0;
+			while (hasNextPage) {
+				pageNbr++;
+				List<String> xNextPage = new ArrayList<String>();
+				String requestUrl = url + privateToken + "&page=" + pageNbr;
+				responseGet = Unirest.get(requestUrl).asJson();
+				int statusCode = responseGet.getStatus();
+				String statusBody = responseGet.getStatusText();
+				JsonNode body = responseGet.getBody();
+				if (responseGet.getStatus() == 200) {
+					xNextPage = responseGet.getHeaders().get("X-Next-Page");
+					node = responseGet.getBody();
+					je = parser.parse(node.toString());
+					o.add("node", je);
+					result.addValue(o);
+				} else {
+					result.getStatus().code = responseGet.getStatus();
+					result.getStatus().setMessage(responseGet.getStatusText());
+				}
+				if (xNextPage.isEmpty() && xNextPage.size() > 0) {
+					try {
+						hasNextPage = xNextPage.get(0) != null && xNextPage.get(0).length() > 0;
+					} catch (Exception e) {
+						hasNextPage = false;
+					}
+				} else {
+					hasNextPage = false;
+				}
 			}
 		} catch (Exception e) {
 			ErrorUtils.report(logger, e);
@@ -501,55 +602,6 @@ public class GitlabUtils {
 		return result;
 	}
 
-	public ResultJsonObjectArray getAsString(
-			String url
-			) {
-		ResultJsonObjectArray result = new ResultJsonObjectArray(true);
-		result.setQuery(url);
-		try {
-			HttpResponse<String> responseGet = Unirest.get(url)
-					.basicAuth(this.token, "x-oauth-basic")
-			        .header("content-type", "*/*")
-			        .asString();
-			if (responseGet.getStatus() == 200) {
-				JsonObject o = new JsonObject();
-				String body = responseGet.getBody();
-				o.addProperty("node", body);
-				result.addValue(o);
-			} else {
-				result.getStatus().code = responseGet.getStatus();
-				result.getStatus().setMessage(responseGet.getStatusText());
-			}
-		} catch (Exception e) {
-			ErrorUtils.report(logger, e);
-		}
-		return result;
-	}
-
-	public ResultJsonObjectArray getAsText(
-			String url
-			) {
-		ResultJsonObjectArray result = new ResultJsonObjectArray(true);
-		result.setQuery(url);
-		try {
-			HttpResponse<InputStream> responseGet = Unirest.get(url)
-					.basicAuth(this.token, "x-oauth-basic")
-			        .header("content-type", "*/*")
-			        .asBinary();
-			if (responseGet.getStatus() == 200) {
-				JsonObject o = new JsonObject();
-				String body = responseGet.getBody().toString();
-				o.addProperty("node", body);
-				result.addValue(o);
-			} else {
-				result.getStatus().code = responseGet.getStatus();
-				result.getStatus().setMessage(responseGet.getStatusText());
-			}
-		} catch (Exception e) {
-			ErrorUtils.report(logger, e);
-		}
-		return result;
-	}
 
 	public ResultJsonObjectArray postAsJson(
 			String url
@@ -595,19 +647,18 @@ public class GitlabUtils {
 		try {
 			String privateToken = "";
 			if (url.contains("?")) {
-				privateToken = "&private_token=" + this.token + "&simple=true";
+				privateToken = "&private_token=" + this.token;
 			} else {
-				privateToken = "?private_token=" + this.token + "&simple=true";
+				privateToken = "?private_token=" + this.token;
 			}
 			responseGet = Unirest.delete(url + privateToken).asJson();
+			result.setStatusCode(responseGet.getStatus());
+			result.setStatusMessage(responseGet.getStatusText());
 			if (responseGet.getStatus() == 202) {
 				node = responseGet.getBody();
 				je = parser.parse(node.toString());
 				o.add("node", je);
 				result.addValue(o);
-			} else {
-				result.getStatus().code = responseGet.getStatus();
-				result.getStatus().setMessage(responseGet.getStatusText());
 			}
 		} catch (Exception e) {
 			ErrorUtils.report(logger, e);

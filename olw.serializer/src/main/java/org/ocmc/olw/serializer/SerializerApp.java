@@ -117,6 +117,7 @@ public class SerializerApp {
 
        		boolean serviceEnabled = true;
     		boolean debugEnabled = false;
+    		boolean reinitEnabled = false;
 
     		String propServiceEnabled = System.getenv("SERVICE_ENABLED");
     		if (propServiceEnabled != null && propServiceEnabled.toLowerCase().equals("false")) {
@@ -126,6 +127,11 @@ public class SerializerApp {
     		String propDebugEnabled = System.getenv("DEBUG_ENABLED");
     		if (propDebugEnabled != null && propDebugEnabled.toLowerCase().equals("true")) {
     			debugEnabled = true;
+    		}
+
+    		String propReinitEnabled = System.getenv("REINIT");
+    		if (propReinitEnabled != null && propReinitEnabled.toLowerCase().equals("true")) {
+    			reinitEnabled = true;
     		}
 
     		String propMessagingEnabled = System.getenv("MSG_ENABLED");
@@ -190,6 +196,7 @@ public class SerializerApp {
 	   									, repoUser
 	   									, repoToken
 	   									, debugEnabled
+	   									, reinitEnabled
 	   									)
 	   							, initialDelay
 	   							, period

@@ -41,7 +41,7 @@ public class GitlabUtilsTest {
 	@Test
 	public void getProjectsMap() {
 		GitlabUtils utils = new GitlabUtils(domain, token);
-		assertTrue(utils.existsProject("db2json"));
+		assertTrue(utils.existsProjectInMap("db2json"));
 	}
 
 	@Test

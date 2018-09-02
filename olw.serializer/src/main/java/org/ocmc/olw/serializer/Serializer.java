@@ -1,18 +1,13 @@
 package org.ocmc.olw.serializer;
 
-import java.io.BufferedReader;
 import java.io.File;
-import java.io.InputStreamReader;
+import java.io.IOException;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
-import java.util.TreeMap;
 
 import org.apache.commons.io.FileUtils;
-import org.apache.commons.lang3.time.StopWatch;
-import org.ocmc.ioc.liturgical.schemas.id.managers.IdManager;
 import org.ocmc.ioc.liturgical.schemas.models.ws.response.ResultJsonObjectArray;
 import org.ocmc.ioc.liturgical.utils.ErrorUtils;
 import org.slf4j.Logger;
@@ -37,13 +32,15 @@ public class Serializer implements Runnable {
 	String whereClause = "";
 	String whereLibraries = "";
 	boolean debugEnabled = false;
+	boolean reinit = false;
 	File gitFolder = null;
 	String gitPath = "";
 	String repoToken = "";
 	String repoUser = "";
 	String repoDomain = "";
 	private Neo4jConnectionManager dbms = null;
-	GitlabUtils gitUtils = null;
+	private GitlabUtils gitUtils = null;
+	private List<String> librariesList = new ArrayList<String>();
 
 	public Serializer(
 			String user
@@ -55,6 +52,7 @@ public class Serializer implements Runnable {
 			, String repoUser
 			, String repoToken
 			, boolean debugEnabled
+			, boolean reinit
 			) {
 		this.user = user;
 		this.pwd = pwd;
@@ -67,6 +65,7 @@ public class Serializer implements Runnable {
 		this.repoUser = repoUser;
 		this.repoToken = repoToken;
 		this.debugEnabled = debugEnabled;
+		this.reinit = reinit;
 	}
 	
 	@Override
@@ -80,37 +79,100 @@ public class Serializer implements Runnable {
 				  , pwd
 				  , false
 				  );
-		List<String> projects = new ArrayList<String>();
-		projects.add("db2json");
-		projects.add("db2ares");
-		this.gitUtils.pullAllProjects(this.gitPath, projects);
-		this.writeNodes2Json();
-		this.writeLinks2Json();
-		this.writeLinkProps2Json();
-		this.writeAges();
+		 this.createLibrariesList();
+
+		 int total = this.librariesList.size();
+		 int processed = 0;
+		 
+		 for (String library : this.librariesList) {
+			Instant libStart = Instant.now();
+			processed++;
+
+			// the work occurs in this procedure
+			this.processLibrary(library, processed, total);
+
+			this.sendMessage(processed + " of " + total + " Neo4j to " + library + "." + this.getElapsedMessage(libStart));
+		 }
+		this.sendMessage(startTime + " started  serializing Neo4j.");
+		this.sendMessage(Instant.now().toString() + " finished serializing Neo4j." + this.getElapsedMessage(start));
+	}
+	
+	private String getElapsedMessage(Instant start) {
 		Instant finish = Instant.now();
 		long timeElapsed = Duration.between(start, finish).toHours();
 		String elapsedMsg = "";
 		if (timeElapsed < 1) {
 			timeElapsed = Duration.between(start, finish).toMinutes();
-			elapsedMsg = ".Elapsed.minutes=" + timeElapsed;
+			if (timeElapsed < 1) {
+				timeElapsed = Duration.between(start, finish).getSeconds();
+				elapsedMsg = ".Elapsed.seconds=" + timeElapsed;
+			} else {
+				elapsedMsg = ".Elapsed.minutes=" + timeElapsed;
+			}
 		} else {
 			elapsedMsg = ".Elapsed.hours=" + timeElapsed;
 		}
-		String pushResult = this.gitUtils.addCommitPushAllProjects(this.gitPath, "Serializer:" + startTime + "." + elapsedMsg);
-		if (this.debugEnabled) {
-			System.out.println(pushResult);
-		}
-		this.sendMessage(startTime + " started  serializing Neo4j.");
-		this.sendMessage(Instant.now().toString() + " finished serializing Neo4j." + elapsedMsg);
+		return elapsedMsg;
 	}
-	
 	private void sendMessage(String m) {
 		String msg = Instant.now().toString() + " " + m;
 		logger.info(msg);
 		SerializerApp.sendMessage(m);
 	}
 
+	private void processLibrary(String library, int libNbr, int totalLibs) {
+//		this.writeNodes2Json();
+		this.writeLinks2Json(Constants.PROJECT_DB2JSON_LINKS, library, libNbr, totalLibs);
+//		this.writeLinkProps2Json();
+		this.writeAges(Constants.PROJECT_DB2ARES , library, libNbr, totalLibs);
+	}
+	/**
+	 * If libraries were specified for either inclusion or exclusion
+	 * in the environmental properties, we will use them.
+	 * 
+	 * Otherwise we will create the list by querying the database.
+	 * 
+	 * This list will exclude en_sys_linguistics.  It will be handled separately
+	 * as a special case.
+	 */
+	private void createLibrariesList() {
+	    StringBuffer sb = new StringBuffer();
+		sb.append("match (n:Root)");
+		if (this.whereClause.length() > 0 && this.whereLibraries.length() > 0) {
+			if (this.whereClause.equals("WHERE")) {
+				sb.append(" where n.library in [");
+			} else if (this.whereClause.equals("WHERE_NOT")) {
+				sb.append(" where not n.library in [");
+			}
+	    	String [] parts = this.whereLibraries.split(",");
+	    	StringBuffer sbLibs = new StringBuffer();
+	    	for (String p : parts) {
+		        if (sbLibs.length() > 0) {
+		        	sbLibs.append(", ");
+		        }
+		        sbLibs.append("'");
+		        sbLibs.append(p.trim());
+		        sbLibs.append("'");
+	    	}
+	    	sb.append(sbLibs.toString());
+	    	sb.append("]");
+		    sb.append(" and not n.library = 'en_sys_linguistics' return distinct n.library as lib order by lib;");
+		} else {
+			sb.append("match (n:Root) where not n.library = 'en_sys_linguistics' return distinct n.library as lib");
+		}
+		
+		ResultJsonObjectArray result = dbms.getForQuery(sb.toString());
+		for (JsonObject o : result.getValues()) {
+			try {
+				if (o != null && o.has("lib"))  {
+					this.librariesList.add(o.get("lib").getAsString());
+				}
+			} catch (Exception e) {
+				ErrorUtils.report(logger, e);
+			}
+		}
+	}
+	
 	/**
 	 * Writes nodes for each library~topic to a single json file
 	 * for that topic
@@ -224,54 +286,49 @@ public class Serializer implements Runnable {
 	 * Writes links to a single json file
 	 * for that topic
 	 */
-	private synchronized void writeLinks2Json() {
-		 	logger.info(Instant.now().toString() + " Writing Links to Json");
-		    StringBuffer sb = new StringBuffer();
-			sb.append("match (f:Root)-[r]->(t:Root)");
-			if (this.whereClause.length() > 0) {
-				if (this.whereLibraries.length() > 0) {
-					if (this.whereClause.equals("WHERE")) {
-						sb.append(" where f.library in [");
-					} else if (this.whereClause.equals("WHERE_NOT")) {
-						sb.append(" where not f.library in [");
-					}
-			    	String [] parts = this.whereLibraries.split(",");
-			    	StringBuffer sbLibs = new StringBuffer();
-			    	for (String p : parts) {
-				        if (sbLibs.length() > 0) {
-				        	sbLibs.append(", ");
-				        }
-				        sbLibs.append("'");
-				        sbLibs.append(p.trim());
-				        sbLibs.append("'");
-			    	}
-			    	sb.append(sbLibs.toString());
-			    	sb.append("]");
+	private synchronized void writeLinks2Json(String groupPath, String library, int libNbr, int totalLibs) {
+		Instant start = Instant.now();
+		if (this.debugEnabled) {
+			logger.info(Instant.now().toString() + " db2json links procssing " + library);
+		}
+		this.preProcessLibrary(groupPath, library);
+		StringBuffer sb = new StringBuffer();
+		sb.append("match (f:Root)-[r]->(:Root) where f.library = '");
+		sb.append(library);
+		sb.append("' return distinct f.topic + '|' + type(r) as libType order by libType;");
+		ResultJsonObjectArray libTypes = dbms.getForQuery(sb.toString());
+		for (JsonObject libType : libTypes.getValues()) {
+			String [] parts = libType.get("libType").getAsString().split("\\|");
+			if (parts.length == 2) {
+				String topic = parts[0];
+				String type = parts[1];
+				StringBuffer ltSb = new StringBuffer();
+				ltSb.append("match (f:Root)-[r:");
+				ltSb.append(type);
+				ltSb.append("]->(t:Root) where f.id starts with  '");
+				ltSb.append(library);
+				ltSb.append("~");
+				ltSb.append(topic);
+				ltSb.append("' return f.id as from, type(r) as type, t.id as to order by f.id;");
+				String topicPath = topic.replaceAll("\\.", "/");
+				topicPath = topicPath.replaceAll("-", "/");
+				topicPath = topicPath.replaceAll("~", "/");
+				ResultJsonObjectArray result = dbms.getForQuery(ltSb.toString());
+				String out = this.gitPath 
+						+ groupPath 
+						+ "/" + library 
+						+ "/" + topicPath 
+						+ "/" + topic + ".json";
+				try {
+					FileUtils.write(new File(out),result.getValuesAsJsonArray().toString());
+				} catch (Exception e) {
+					ErrorUtils.report(logger, e);
 				}
+			} else {
+				logger.error("Unexpected libType parts length for " + libType);
 			}
-			sb.append(" return distinct f.library + '|' + type(r) as libType order by libType;");
-			ResultJsonObjectArray libTypes = dbms.getForQuery(sb.toString());
-			for (JsonObject libType : libTypes.getValues()) {
-				String [] parts = libType.get("libType").getAsString().split("\\|");
-				if (parts.length == 2) {
-					StringBuffer ltSb = new StringBuffer();
-					ltSb.append("match (f:Root)-[r:");
-					ltSb.append(parts[1]);
-					ltSb.append("]->(t:Root) where f.id starts with '");
-					ltSb.append(parts[0]);
-					ltSb.append("' return f.id as from, type(r) as type, t.id as to order by f.id;");
-					ResultJsonObjectArray result = dbms.getForQuery(ltSb.toString());
-					String out = this.gitPath + Constants.PROJECT_DB2JSON_LINKS + "/" + parts[0] + "/" + parts[1] + ".json";
-					try {
-						FileUtils.write(new File(out),result.getValuesAsJsonArray().toString());
-						GitlabUtils.gitAdd(this.gitPath, Constants.PROJECT_DB2JSON_LINKS, out);
-					} catch (Exception e) {
-						ErrorUtils.report(logger, e);
-					}
-				}
-				String pushResult = this.gitUtils.commitPushAllProjects(this.gitPath, "Serializer:db2json:links:" + libType + "." + Instant.now().toString());
-			}
-			
+		}
+		GitlabUtils.gitAddCommitPush(this.gitPath + groupPath, "olwsys", library, ".", Instant.now().toString() + ".Serialized." + this.getElapsedMessage(start));
 	}
 	
 	/**
@@ -307,85 +364,112 @@ public class Serializer implements Runnable {
 			}
 	}
 
+	private void preProcessLibrary(String group, String library) {
+		String fullPath = group + "/" + library;
+		File f = new File(this.gitPath + fullPath);
+		if (this.reinit) {
+			// delete local repo
+			if (f.exists()) {
+				try {
+					FileUtils.deleteDirectory(f);
+				} catch (IOException e) {
+					ErrorUtils.report(logger, e);
+				}
+			}
+			// delete cloud repo
+			if (this.gitUtils.existsProjectOnServer(fullPath)) {
+				this.gitUtils.deleteProject(fullPath);
+				try {
+					Thread.sleep(3000); // give the server time to process the delete before we attempt to recreate the project
+				} catch (InterruptedException e) {
+				}
+			}
+		}
+		if (f.exists()) {
+			GitlabUtils.pullGitlabProject(this.gitPath + group, this.repoDomain, group, library, this.repoToken);
+		} else {
+			try {
+				FileUtils.forceMkdir(f.getParentFile());
+				if (! this.gitUtils.existsProjectOnServer(group + "/" + library)) {
+					ResultJsonObjectArray createResult = this.gitUtils.createProjectInGroup(group, library);
+					if (createResult.getStatus().code != 200) {
+						try {
+							Thread.sleep(5000);
+							this.gitUtils.createProjectInGroup(group, library);
+						} catch (InterruptedException e) {
+						}
+						
+					}
+				}
+				GitlabUtils.cloneGitlabProject(this.gitPath + group, this.repoDomain, group, library, this.repoToken);
+			} catch (IOException e) {
+				ErrorUtils.report(logger, e);
+			}
+		}
+	}
 	/**
 	 * Reads the serailized Json files and converts
 	 * AGES libraries to ares format and writes
 	 * the ares files
 	 */
-	private void writeAges() {
-	 	logger.info(Instant.now().toString() + " Writing AGES ares files");
+	private void writeAges(String groupPath, String library, int libNbr, int totalLibs) {
 		try {
-			String lQ = "match (n:Liturgical) return distinct n.library as library order by n.library;";
-			ResultJsonObjectArray lQr = dbms.getForQuery(lQ);
-			if (this.debugEnabled) {
-				logger.info(Integer.toString(lQr.status.code));
-				logger.info(lQr.status.developerMessage);
-				logger.info(Long.toString(lQr.valueCount));
-			}
+			Instant start = Instant.now();
+			String fullPath = groupPath + "/" + library;
+			this.preProcessLibrary(groupPath, library);
+			String [] libParts = library.split("_");
+			String  agesDomain = "_" + libParts[0] + "_" + libParts[1].toUpperCase() + "_" + libParts[2]; 
+			StringBuffer tQsb = new StringBuffer();
+			tQsb.append("match (n:Liturgical) where n.id starts with '");
+			tQsb.append(library);
+			tQsb.append("' return distinct n.topic as topic order by n.topic;");
+			ResultJsonObjectArray tQr = dbms.getForQuery(tQsb.toString());
+
 			long processed = 0;
-			long total = lQr.valueCount;
-			
-			for (JsonObject libO : lQr.getValues()) {
-				StringBuffer tQsb = new StringBuffer();
-				if (libO != null && libO.has("library")) {
-					String library = libO.get("library").getAsString();
-					String [] libParts = library.split("_");
-					String  agesDomain = "_" + libParts[0] + "_" + libParts[1].toUpperCase() + "_" + libParts[2]; 
-					logger.info(Instant.now().toString() + " processing library " + library);
-					tQsb.append("match (n:Liturgical) where n.id starts with '");
-					tQsb.append(library);
-					tQsb.append("' return distinct n.topic as topic order by n.topic;");
-					ResultJsonObjectArray tQr = dbms.getForQuery(tQsb.toString());
+			long total = tQr.valueCount;
 
-					for (JsonObject topicO : tQr.getValues()) {
-						
-						String topic = topicO.get("topic").getAsString();
-						String agesResource = topic + agesDomain;
-						logger.info(Instant.now().toString() + " processing library/topic " + library + "~" + topic);
-						StringBuffer vQsb = new StringBuffer();
-						vQsb.append("match (n:Liturgical) where n.id starts with '");
-						vQsb.append(library);
-						vQsb.append("~");
-						vQsb.append(topic);
-						vQsb.append("' return n.key as key, n.value as value, n.redirectId as redirectId order by n.id;");
+			for (JsonObject topicO : tQr.getValues()) {
+				String topic = topicO.get("topic").getAsString();
+				String agesResource = topic + agesDomain;
+				StringBuffer vQsb = new StringBuffer();
+				vQsb.append("match (n:Liturgical) where n.id starts with '");
+				vQsb.append(library);
+				vQsb.append("~");
+				vQsb.append(topic);
+				vQsb.append("' return n.key as key, n.value as value, n.redirectId as redirectId order by n.id;");
 
-						StringBuffer sb = new StringBuffer();
-						sb.append("A_Resource_Whose_Name = ");
-						sb.append(agesResource);
-						sb.append("\n\n");
-						ResultJsonObjectArray vQr = dbms.getForQuery(vQsb.toString());
-						for (JsonObject vO : vQr.getValues()) {
-							sb.append(vO.get("key").getAsString());
-							sb.append(" = ");
-							String value = "";
-							String redirect = "";
-							if (vO.has("value")) {
-								value = vO.get("value").getAsString();
-							} else if (vO.has("redirectId")) {
-								redirect = vO.get("redirect").getAsString();
-							}
-							if (value.length() > 0) {
-								sb.append(LibraryUtils.wrapQuotes(value));
-							} else if (redirect.length() > 0) {
-								sb.append(redirect);
-							}
-							sb.append("\n");
-							String topicPath = topic.replaceAll("_", "/");
-							topicPath = topicPath.replaceAll("\\.", "/");
-							String out = this.gitPath + Constants.PROJECT_DB2ARES + "/" + library + "/" + topicPath + "/" + agesResource + ".ares";
-							FileUtils.write(new File(out), sb.toString());
-							GitlabUtils.gitAdd(this.gitPath, Constants.PROJECT_DB2ARES, out);
-							if (this.debugEnabled) {
-								logger.info(Instant.now().toString() + " wrote " + out);
-							}
-						}
+				StringBuffer sb = new StringBuffer();
+				sb.append("A_Resource_Whose_Name = ");
+				sb.append(agesResource);
+				sb.append("\n\n");
+				ResultJsonObjectArray vQr = dbms.getForQuery(vQsb.toString());
+				for (JsonObject vO : vQr.getValues()) {
+					sb.append(vO.get("key").getAsString());
+					sb.append(" = ");
+					String value = "";
+					String redirect = "";
+					if (vO.has("value")) {
+						value = vO.get("value").getAsString();
+					} else if (vO.has("redirectId")) {
+						redirect = vO.get("redirect").getAsString();
 					}
-					String pushResult = this.gitUtils.commitPushAllProjects(this.gitPath, "Serializer:db2ares:" + library + "." + Instant.now().toString());
-					processed++;
-					logger.info(Instant.now().toString() + " processed " + library + " " + processed + " of " + total + " libraries.");
+					if (value.length() > 0) {
+						sb.append(LibraryUtils.wrapQuotes(value));
+					} else if (redirect.length() > 0) {
+						sb.append(redirect);
+					}
+					sb.append("\n");
+				}
+				String topicPath = topic.replaceAll("_", "/");
+				topicPath = topicPath.replaceAll("\\.", "/");
+				String out = this.gitPath + fullPath + "/" + topicPath + "/" + agesResource + ".ares";
+				FileUtils.write(new File(out), sb.toString());
+				processed++;
+				if (this.debugEnabled) {
+					logger.info(libNbr + " of " + totalLibs + " " + Instant.now().toString() + " processed library/topic " + processed + " of " + total + " " + library + "~" + topic);
 				}
 			}
-				
+			GitlabUtils.gitAddCommitPush(this.gitPath + groupPath, "olwsys", library, ".", Instant.now().toString() + ".Serialized." + this.getElapsedMessage(start));
 		} catch (Exception e) {
 			ErrorUtils.report(logger, e);
 		}
