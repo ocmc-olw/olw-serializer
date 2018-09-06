@@ -1,0 +1,24 @@
+A_Resource_Whose_Name = me.m08.d16_en_US_repass
+
+meCommemoration.text = ""
+meDate.text = ""
+meHO.commemorations = ""
+meHO.note1 = ""
+meHO.note2 = ""
+meHO.number = ""
+meHO.rank = ""
+meInsert1 = ""
+meInsert2 = ""
+meLE.commemoration1 = ""
+meLE.commemoration2 = ""
+meMA.Exaposteilarion1.melody = he.a.m2_en_US_repass.GynaikesAkoutisthite.notmetered
+meMA.Exaposteilarion1.mode = misc_en_US_repass.Mode2
+meMA.Exaposteilarion1.text = "Divinely you empurpled the Church of Christ with the streams of your blood, O glorious greatmartyr, and extinguished the soul-destroying deception of idolatry, all-blissful Diomedes. And now do not cease interceding with the Lord on our behalf."
+meMA.Exaposteilarion2.melody = he.a.m3_en_US_repass.OOuranonToisAstrois.notmetered
+meMA.Exaposteilarion2.mode = misc_en_US_repass.Mode3
+meMA.Exaposteilarion2.text = ""
+meMA.Kathisma21.melody = he.a.m4_en_US_repass.KateplagiIosif.notmetered
+meMA.Kathisma21.mode = misc_en_US_repass.Mode4
+meMA.Kathisma21.text = "Your soul, which you commended into the hands of him who for our sake became incarnate of you, he, as your fashioner and God, translated to unadulterated bliss. Therefore, we reverently bless you who alone are pure and undefiled. And, rightfully confessing you as Theotokos, we all cry out: Beseech Christ to whom you have departed, to save our souls."
+meNote.text = ""
+meShortCommemoration1.text = ""

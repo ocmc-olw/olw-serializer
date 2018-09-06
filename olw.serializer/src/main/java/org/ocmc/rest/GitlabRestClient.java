@@ -1,65 +1,69 @@
 package org.ocmc.rest;
 
-import java.util.Map;
-import java.util.TreeMap;
+import java.io.BufferedReader;
+import java.io.File;
+import java.io.InputStreamReader;
 
+import org.eclipse.jgit.util.FileUtils;
 import org.ocmc.ioc.liturgical.schemas.constants.HTTP_RESPONSE_CODES;
 import org.ocmc.ioc.liturgical.schemas.models.ws.response.ResultJsonObjectArray;
-import org.ocmc.ioc.liturgical.utils.ErrorUtils;
-import org.ocmc.olw.serializer.models.GitlabGroup;
-import org.ocmc.olw.serializer.models.GitlabProject;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
+import com.google.gson.JsonArray;
+import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 
+/**
+ * Provides rest api to Gitlab server.
+ * Also provides ability to add, commit, push, pull local git repositories
+ * @author mac002
+ *
+ */
 public class GitlabRestClient extends GenericRestClient {
-	private static final Logger logger = LoggerFactory.getLogger(GitlabRestClient.class);
 	public static enum TOPICS  {groups, projects};
-    private Map<String, GitlabGroup> groupsMap = new TreeMap<String,GitlabGroup>();
-    private Map<String, GitlabProject>  projectsMap = new TreeMap<String,GitlabProject>();
 
+    public GitlabRestClient(String url, String token) throws RestInitializationException {
+    	super(
+    			url.contains("api") ? url : "https://" + url + "/api/v4/"
+    			, token
+    			);
+    }
 
-    public GitlabRestClient(String url, String token) {
-    	super(url, token);
-    	this.loadMaps();
+    public boolean existsGroup(String name) {
+    	boolean result = false;
+    	try {
+        	ResultJsonObjectArray queryResult = this.getGroup(name);
+        	result = queryResult.getStatus().code == HTTP_RESPONSE_CODES.OK.code 
+        			&& queryResult.getFirstObjectValueAsObject().get("full_path").getAsString().equals(name);
+    	} catch (Exception e) {
+    		result = false;
+    	}
+    	return result;
     }
     
-    private void loadMaps() {
-    	try {
-    		ResultJsonObjectArray queryResult = this.get("groups","","");
-    		for (JsonObject o : queryResult.values) {
-    			try {
-    				GitlabGroup p = GitlabRestClient.gson.fromJson(
-    						o.toString()
-    						, GitlabGroup.class
-    						);
-    				this.groupsMap.put(p.getFull_path(), p);
-    			} catch (Exception e) {
-    				ErrorUtils.report(logger, e);
-    			}
-    		}
-    		queryResult = this.get("projects", "", "");
-    		for (JsonObject o : queryResult.values) {
-    			try {
-        			GitlabProject p = GenericRestClient.gson.fromJson(
-        					o.toString()
-        					, GitlabProject.class
-        					);
-        			this.projectsMap.put(p.getPath_with_namespace(), p);
-    			} catch (Exception e) {
-    				ErrorUtils.report(logger, e);
-    			}
-    		}
-    	} catch (Exception e) {
-    		ErrorUtils.report(logger, e);
-    	}
+    public boolean existsProject(String name) {
+    	boolean result = false;
+    	return result;
     }
-
+    
     public ResultJsonObjectArray getGroup(String name) {
     	return this.request(METHODS.GET, TOPICS.groups.name(), name, "");
     }
+    
+    public ResultJsonObjectArray deleteAllProjectsInGroup(String group) {
+    	ResultJsonObjectArray result = new ResultJsonObjectArray(false);
+    	ResultJsonObjectArray groupQuery = this.getGroup(group);
+    	if (groupQuery.getStatus().code == HTTP_RESPONSE_CODES.OK.code) {
+    		JsonObject o = groupQuery.getFirstObjectValueAsObject();
+    		JsonArray projects = o.get("projects").getAsJsonArray();
+    		for (JsonElement e : projects) {
+    			JsonObject project = e.getAsJsonObject();
+    			this.deleteProject(project.get("path_with_namespace").getAsString());
+    		}
+    	}
+    	return result;
+    }
 
+  
     public ResultJsonObjectArray deleteProject(String name) {
     	return this.request(METHODS.DELETE, TOPICS.projects.name(), name, "");
     }
@@ -78,5 +82,198 @@ public class GitlabRestClient extends GenericRestClient {
     		return theGroup;
     	}
     }
+    
+	public String gitAddCommitPush(
+			String dir
+			, String user
+			, String project
+			, String filter
+			, String msg
+			) {
+		StringBuffer result = new StringBuffer();
+		result.append(this.gitAdd(dir, project, filter));
+		result.append("\n");
+		result.append(this.gitCommit(dir,user,project,msg));
+		result.append("\n");
+		result.append(this.gitPush(dir,project));
+		result.append("\n");
+		return result.toString();
+	}
+	
+	public String gitAdd(
+			String dir
+			, String project
+			, String filter
+			) {
+		StringBuffer result = new StringBuffer();
+		try {
+				ProcessBuilder  ps = new ProcessBuilder("git",  "add", filter);
+				ps.directory(new File(dir + "/" + project));
+				ps.redirectErrorStream(true);
+
+				Process pr = ps.start();  
+
+				BufferedReader in = new BufferedReader(new InputStreamReader(pr.getInputStream()));
+				String line;
+				while ((line = in.readLine()) != null) {
+					result.append(line);
+					result.append(" ");
+				}
+				pr.waitFor();
+				
+				in.close();
+				result.append("\n OK");
+		} catch (Exception e) {
+			e.printStackTrace();
+		}
+		return result.toString();
+	}
+	
+	public String gitCommit(
+			String dir
+			, String user
+			, String project
+			, String msg
+			) {
+		StringBuffer result = new StringBuffer();
+		try {
+				ProcessBuilder  ps = new ProcessBuilder("git",  "-c", "user.name=olwsys", "-c", "user.email=olw@ocmc.org", "commit", "-m", msg);
+				ps.directory(new File(dir + "/" + project));
+				ps.redirectErrorStream(true);
+
+				Process pr = ps.start();  
+
+				BufferedReader in = new BufferedReader(new InputStreamReader(pr.getInputStream()));
+				String line;
+				while ((line = in.readLine()) != null) {
+					result.append(line);
+					result.append(" ");
+				}
+				pr.waitFor();
+				
+				in.close();
+				result.append("\n OK");
+		} catch (Exception e) {
+			e.printStackTrace();
+		}
+		return result.toString();
+	}
+	
+	public String gitPush(
+			String dir
+			, String project
+			) {
+		StringBuffer result = new StringBuffer();
+		try {
+				ProcessBuilder  ps = new ProcessBuilder("git",  "push", "origin");
+				ps.directory(new File(dir + "/" + project));
+				ps.redirectErrorStream(true);
+
+				Process pr = ps.start();  
+
+				BufferedReader in = new BufferedReader(new InputStreamReader(pr.getInputStream()));
+				String line;
+				while ((line = in.readLine()) != null) {
+					result.append(line);
+					result.append(" ");
+				}
+				pr.waitFor();
+				
+				in.close();
+				result.append("\n OK");
+		} catch (Exception e) {
+			e.printStackTrace();
+		}
+		return result.toString();
+	}
+	
+	public String pullGitlabProject(
+			String dir
+			, String domain
+			, String user
+			, String project
+			) {
+		StringBuffer result = new StringBuffer();
+		try {
+			StringBuffer url = new StringBuffer();
+			url.append("https://ioauth2:");
+			url.append(this.getToken());
+			url.append("@");
+			url.append(domain);
+			url.append("/");
+			url.append(user);
+			url.append("/");
+			url.append(project);
+			url.append(".git");
+				ProcessBuilder  ps = new ProcessBuilder("git",  "pull", url.toString());
+				File file = new File(dir);
+				if (! file.exists()) {
+					FileUtils.mkdirs(file);
+				}
+				ps.directory(file);
+				ps.redirectErrorStream(true);
+
+				Process pr = ps.start();  
+
+				BufferedReader in = new BufferedReader(new InputStreamReader(pr.getInputStream()));
+				String line;
+				while ((line = in.readLine()) != null) {
+					result.append(line);
+					result.append(" ");
+				}
+				pr.waitFor();
+				
+				in.close();
+				result.append("\n OK");
+		} catch (Exception e) {
+			e.printStackTrace();
+		}
+		return result.toString();
+	}
+
+	public String cloneGitlabProject(
+			String dir
+			, String domain
+			, String user
+			, String project
+			) {
+		StringBuffer result = new StringBuffer();
+		try {
+			//https://gitlab.liml.org/serialized/db2ares/en_uk_tfm.git
+			StringBuffer url = new StringBuffer();
+			url.append("https://ioauth2:");
+			url.append(this.getToken());
+			url.append("@");
+			url.append(domain);
+			url.append("/");
+			url.append(user);
+			url.append("/");
+			url.append(project);
+			url.append(".git");
+				ProcessBuilder  ps = new ProcessBuilder("git",  "clone", url.toString());
+				File file = new File(dir);
+				if (! file.exists()) {
+					FileUtils.mkdirs(file);
+				}
+				ps.directory(file);
+				ps.redirectErrorStream(true);
+
+				Process pr = ps.start();  
+
+				BufferedReader in = new BufferedReader(new InputStreamReader(pr.getInputStream()));
+				String line;
+				while ((line = in.readLine()) != null) {
+					result.append(line);
+					result.append(" ");
+				}
+				pr.waitFor();
+				
+				in.close();
+				result.append("\n OK");
+		} catch (Exception e) {
+			e.printStackTrace();
+		}
+		return result.toString();
+	}
 
 }

@@ -1,0 +1,19 @@
+A_Resource_Whose_Name = he.a.m5_en_US_repass
+
+ChairoisAskitikon.mode = misc_en_US_repass.Mode5
+ChairoisAskitikon.name = "Rejoice."
+ChairoisAskitikon.notmetered = "N/M (Rejoice.)"
+ChairoisAskitikon.text = ""
+LampeiSimeron.mode = misc_en_US_repass.Mode5
+LampeiSimeron.name = ""
+LampeiSimeron.notmetered = "N/M ()"
+LampeiSimeron.text = ""
+OsiePater.mode = misc_en_US_repass.Mode5
+OsiePater.name = "God-bearing Father."
+OsiePater.notmetered = "N/M (God-bearing Father.)"
+OsiePater.text = ""
+TonSynanarchonLogon.mode = misc_en_US_repass.Mode5
+TonSynanarchonLogon.name = "Let us worship the Word."
+TonSynanarchonLogon.notmetered = "N/M (Let us worship the Word.)"
+TonSynanarchonLogon.text = "Let us the faithful praise and worship the Word, who with the Father and the Spirit has no beginning, who was born of the Virgin for our salvation. For he was pleased to ascend the Cross in the flesh, to endure death, and to raise the dead, by his glorious Resurrection. "
+he.title = ""

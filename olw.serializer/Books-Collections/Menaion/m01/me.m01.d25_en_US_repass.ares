@@ -1,0 +1,27 @@
+A_Resource_Whose_Name = me.m01.d25_en_US_repass
+
+meCommemoration.text = ""
+meDate.text = ""
+meHO.commemorations = ""
+meHO.note1 = rubrical_en_US_repass.HolidayWineOil
+meHO.note2 = ""
+meHO.number = ""
+meHO.rank = ""
+meInsert1 = ""
+meInsert2 = ""
+meLE.commemoration1 = ""
+meLE.commemoration2 = ""
+meNote.text = ""
+meShortCommemoration1.text = ""
+meVE.SticGlory.melody = ""
+meVE.SticGlory.mode = misc_en_US_repass.Mode8
+meVE.SticGlory.text = "Your tongue, which was vigilant in teaching, sounds in the ears of hearts, arousing the souls of the slothful; and through your words of godly eloquence, a ladder is found leading those on earth up to heaven. Therefore, Gregory the Theologian, do not cease interceding with Christ God, that our souls may be preserved from dangers and trials."
+meVE.Stichera04.melody = he.a.m2_en_US_repass.PoioisEffimionStemmasin.notmetered
+meVE.Stichera04.mode = misc_en_US_repass.Mode2
+meVE.Stichera04.text = "Come, in sacred melodies, let us praise the Theologian: the vigilant eye of grace and all-wise mouth of the Spirit; the bright luminary of the inhabited earth, the magnificent voice of the Church, the all-marvellous fame of Orthodoxy, the fountain of theology; the ever-flowing river of divine doctrines, the spring issuing divine streams of spiritual nectar."
+meVE.Stichera05.melody = he.a.m2_en_US_repass.PoioisEffimionStemmasin.notmetered
+meVE.Stichera05.mode = misc_en_US_repass.Mode2
+meVE.Stichera05.text = "With spiritual love let us sing today in praise of the Hierarch who shared the Apostles' ways. He is the great champion defender of true piety; he is the flood of divine oratory; the most delightful river of teaching; the assurance of lofty and eloquent discourse; the lips of heavenly thunder; the tongue of fiery breath; the treasury of wisdom; the preacher of the Word; the adornment of the faithful."
+meVE.Stichera06.melody = he.a.m2_en_US_repass.PoioisEffimionStemmasin.notmetered
+meVE.Stichera06.mode = misc_en_US_repass.Mode2
+meVE.Stichera06.text = "With hymns, let us all duly honor the Theologian, the guardian of Christ's flock, the all-wise hunter of wolves, the uprooter of falsely-sown weeds; the all-marvellous sower of right doctrines; the strongest persecutor of heretics, who by divine vigilance truly increased the talents Christ gave him, as was fitting, and enlightened the world with the divine brightness of doctrines."

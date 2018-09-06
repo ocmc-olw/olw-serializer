@@ -97,6 +97,7 @@ public class SerializerApp {
     		} catch (Exception e) {
     			period = 4;
     		}
+
     		String unit = System.getenv("TIME_UNIT");
     		TimeUnit timeUnit = TimeUnit.HOURS;
     		if (unit != null) {
@@ -115,7 +116,14 @@ public class SerializerApp {
         		}
     		}
 
-       		boolean serviceEnabled = true;
+    		int pushDelay       = 1;
+    		try {
+        		pushDelay = Integer.parseInt(System.getenv("PUSH_DELAY"));
+    		} catch (Exception e) {
+    			pushDelay = 30000; // 60000 milliseconds = 1 minute
+    		}
+
+    		boolean serviceEnabled = true;
     		boolean debugEnabled = false;
     		boolean reinitEnabled = false;
 
@@ -195,6 +203,7 @@ public class SerializerApp {
 	   									, repoDomain
 	   									, repoUser
 	   									, repoToken
+	   									, pushDelay
 	   									, debugEnabled
 	   									, reinitEnabled
 	   									)

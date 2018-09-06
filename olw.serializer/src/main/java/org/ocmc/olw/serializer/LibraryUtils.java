@@ -34,11 +34,15 @@ public class LibraryUtils {
 	 * @return the string
 	 */
 	public static String wrapQuotes(String s) {
+		String result = "";
 		if (s.length() > 0) {
-			return QUOTE + escapeQuotes(s) + QUOTE;
+			result = QUOTE + escapeQuotes(s) + QUOTE;
 		} else {
-			return QUOTE+QUOTE;
+			result = QUOTE+QUOTE;
 		}
+		result = result.replaceAll("\\n", "");
+		result = result.replaceAll("\\r", "");
+		return result;
 	}
 	
 	

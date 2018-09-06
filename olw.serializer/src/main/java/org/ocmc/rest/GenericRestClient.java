@@ -5,15 +5,9 @@ import java.io.InputStreamReader;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.net.URLEncoder;
-import java.util.Map;
-import java.util.TreeMap;
 
 import org.ocmc.ioc.liturgical.schemas.constants.HTTP_RESPONSE_CODES;
 import org.ocmc.ioc.liturgical.schemas.models.ws.response.ResultJsonObjectArray;
-import org.ocmc.ioc.liturgical.utils.ErrorUtils;
-import org.ocmc.olw.serializer.models.GitlabProject;
-import org.ocmc.olw.serializer.GitlabUtils;
-import org.ocmc.olw.serializer.models.GitlabGroup;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -34,12 +28,17 @@ public class GenericRestClient {
 	private String token = "";
     private String apiUrl = "";
 
-    public GenericRestClient(String url, String token) {
+    public GenericRestClient(String url, String token) throws RestInitializationException {
     	this.token = token;
-    	try {
-        	this.apiUrl = url;
-    	} catch (Exception e) {
-    		ErrorUtils.report(logger, e);
+    	if (this.token == null || this.token.length() == 0) {
+    		throw new RestInitializationException("Rest token must not be null or empty");
+    	} else {
+           this.apiUrl = url;
+           if (url == null || url.length() == 0) {
+        	   throw new RestInitializationException("Rest url must not be null or empty");
+           } else {
+        	   this.apiUrl = url;
+           }
     	}
     }
     
@@ -70,7 +69,7 @@ public class GenericRestClient {
      * @param method i.e. RESTCLIENT.METHODS.GET, POST, PUT, DELETE
      * @param topic i.e. RESTCLIENT.TOPICS.groups or projects
      * @param path is optional and is the group and entity, e.g. serialized/db2json/nodes.  This will URLEncoder.encode applied to it.
-     * @param query is optional and is e.g. ?name=somename&namespace_id=somenamespace
+     * @param query is optional 
      * @return the result object array.  Each occurrence returned will be a JsonObject
      */
     public synchronized ResultJsonObjectArray request(
