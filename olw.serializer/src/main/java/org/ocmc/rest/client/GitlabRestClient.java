@@ -1,4 +1,4 @@
-package org.ocmc.rest;
+package org.ocmc.rest.client;
 
 import java.io.BufferedReader;
 import java.io.File;
@@ -49,6 +49,32 @@ public class GitlabRestClient extends GenericRestClient {
     	return this.request(METHODS.GET, TOPICS.groups.name(), name, "");
     }
     
+    public ResultJsonObjectArray getGroups() {
+    	return this.request(METHODS.GET, TOPICS.groups.name(), "", "");
+    }
+
+    public ResultJsonObjectArray cloneAllProjectsInGroup(String dir, String user, String group) {
+    	ResultJsonObjectArray result = new ResultJsonObjectArray(false);
+    	ResultJsonObjectArray groupsQuery = this.getGroups();
+    	if (groupsQuery.getStatus().code == HTTP_RESPONSE_CODES.OK.code) {
+    		for (JsonObject go : groupsQuery.values) {
+    			String goGroup = go.get("full_path").getAsString();
+    			if (goGroup.startsWith(group)) {
+                	ResultJsonObjectArray groupQuery = this.getGroup(goGroup);
+                	if (groupQuery.getStatus().code == HTTP_RESPONSE_CODES.OK.code) {
+                		JsonObject o = groupQuery.getFirstObjectValueAsObject();
+                		JsonArray projects = o.get("projects").getAsJsonArray();
+                		for (JsonElement e : projects) {
+                			JsonObject po = e.getAsJsonObject();
+                			String project = po.get("name").getAsString();
+                			this.cloneGitlabProject(dir + "/" + goGroup, goGroup, project);
+                		}
+                	}
+    			}
+    		}
+    	}
+    	return result;
+    }
     public ResultJsonObjectArray deleteAllProjectsInGroup(String group) {
     	ResultJsonObjectArray result = new ResultJsonObjectArray(false);
     	ResultJsonObjectArray groupQuery = this.getGroup(group);
@@ -189,6 +215,14 @@ public class GitlabRestClient extends GenericRestClient {
 	
 	public String pullGitlabProject(
 			String dir
+			, String user
+			, String project
+			) {
+		return this.pullGitlabProject(dir, this.getApiDomain(), user, project);
+	}
+	
+	public String pullGitlabProject(
+			String dir
 			, String domain
 			, String user
 			, String project
@@ -276,4 +310,11 @@ public class GitlabRestClient extends GenericRestClient {
 		return result.toString();
 	}
 
+	public String cloneGitlabProject(
+			String dir
+			, String user
+			, String project
+			) {
+		return this.cloneGitlabProject(dir, this.getApiDomain(), user, project);
+	}
 }

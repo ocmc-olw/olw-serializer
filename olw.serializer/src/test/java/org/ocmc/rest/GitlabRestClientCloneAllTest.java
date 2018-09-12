@@ -9,13 +9,20 @@ import org.ocmc.ioc.liturgical.schemas.constants.HTTP_RESPONSE_CODES;
 import org.ocmc.ioc.liturgical.schemas.models.ws.response.ResultJsonObjectArray;
 import org.ocmc.rest.client.GitlabRestClient;
 
-public class GitlabRestClientDeleteAllTest {
+public class GitlabRestClientCloneAllTest {
+	private static String user = "";
+	private static String group = "";
 	private static String token = "";
+	private static String dir = "";
 	private static String url = "https://gitlab.liml.org/api/v4/";
 	
 	@Before
 	public void setUp() throws Exception {
+		dir = System.getenv("DIR");
+		group = System.getenv("GROUP");
 		token = System.getenv("TOKEN");
+		user = System.getenv("UID");
+		url = System.getenv("URL");
 		assertTrue(token != null);
 	}
 
@@ -24,14 +31,11 @@ public class GitlabRestClientDeleteAllTest {
 	}
 
 	@Test
-	public void testDeleteAllProjects() {
+	public void testCloneAllProjects() {
 		try {
-			String group = "test";
-			GitlabRestClient rc = new GitlabRestClient(GitlabRestClientDeleteAllTest.url, GitlabRestClientDeleteAllTest.token);
+			GitlabRestClient rc = new GitlabRestClient(GitlabRestClientCloneAllTest.url, GitlabRestClientCloneAllTest.token);
 			ResultJsonObjectArray result = null;
-			result = rc.postProject(group, "test1");
-			result = rc.postProject(group, "test2");
-			result = rc.deleteAllProjectsInGroup(group);
+			result = rc.cloneAllProjectsInGroup(dir, user, group);
 			assertTrue(result.getStatus().code == HTTP_RESPONSE_CODES.OK.code);
 		} catch (Exception e) {
 			fail(e.getMessage());

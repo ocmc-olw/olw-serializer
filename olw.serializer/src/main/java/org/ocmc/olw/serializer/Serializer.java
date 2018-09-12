@@ -12,8 +12,8 @@ import org.apache.commons.lang3.StringUtils;
 import org.ocmc.ioc.liturgical.schemas.id.managers.IdManager;
 import org.ocmc.ioc.liturgical.schemas.models.ws.response.ResultJsonObjectArray;
 import org.ocmc.ioc.liturgical.utils.ErrorUtils;
-import org.ocmc.rest.GitlabRestClient;
-import org.ocmc.rest.RestInitializationException;
+import org.ocmc.rest.client.GitlabRestClient;
+import org.ocmc.rest.client.RestInitializationException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -517,7 +517,9 @@ public class Serializer implements Runnable {
 						sb.append(redirect);
 					 } else {
 							if (value.length() > 0) {
-								sb.append(LibraryUtils.wrapQuotes(value));
+								String quoted = LibraryUtils.wrapQuotes(value);
+								quoted = quoted.replaceAll("\\\\", "\\");
+								sb.append(quoted);
 							} else  {
 								sb.append("\"\"");
 							}

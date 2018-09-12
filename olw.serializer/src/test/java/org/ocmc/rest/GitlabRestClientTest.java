@@ -7,6 +7,7 @@ import org.junit.Before;
 import org.junit.Test;
 import org.ocmc.ioc.liturgical.schemas.constants.HTTP_RESPONSE_CODES;
 import org.ocmc.ioc.liturgical.schemas.models.ws.response.ResultJsonObjectArray;
+import org.ocmc.rest.client.GitlabRestClient;
 
 public class GitlabRestClientTest {
 	private static String token = "";

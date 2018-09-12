@@ -1,8 +1,9 @@
-package org.ocmc.rest;
+package org.ocmc.rest.client;
 
 import java.io.BufferedReader;
 import java.io.InputStreamReader;
 import java.net.HttpURLConnection;
+import java.net.MalformedURLException;
 import java.net.URL;
 import java.net.URLEncoder;
 
@@ -27,6 +28,7 @@ public class GenericRestClient {
 	public static enum METHODS  {GET, POST, PUT, DELETE};
 	private String token = "";
     private String apiUrl = "";
+    private String apiDomain = "";
 
     public GenericRestClient(String url, String token) throws RestInitializationException {
     	this.token = token;
@@ -34,6 +36,11 @@ public class GenericRestClient {
     		throw new RestInitializationException("Rest token must not be null or empty");
     	} else {
            this.apiUrl = url;
+           try {
+			URL theUrl = new URL(url);
+			this.apiDomain = theUrl.getHost();
+			} catch (MalformedURLException e) {
+			}
            if (url == null || url.length() == 0) {
         	   throw new RestInitializationException("Rest url must not be null or empty");
            } else {
@@ -187,5 +194,15 @@ public class GenericRestClient {
 
 	public void setApiUrl(String apiUrl) {
 		this.apiUrl = apiUrl;
+	}
+
+
+	public String getApiDomain() {
+		return apiDomain;
+	}
+
+
+	public void setApiDomain(String apiDomain) {
+		this.apiDomain = apiDomain;
 	}
 }
