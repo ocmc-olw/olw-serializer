@@ -33,9 +33,13 @@ public class Serializer implements Runnable {
 	String user = null;
 	String pwd = null;
 	String url = null;
-	String whereClause = "";
+	String gitlabGroup = "serialized";
+	String whereLibraryClause = "";
 	String whereLibraries = "";
+	String whereSchemaClause = "";
+	String whereSchemas = "";
 	boolean debugEnabled = false;
+	boolean pushEnabled = true;
 	boolean reinit = false;
 	File gitFolder = null;
 	String gitPath = "";
@@ -45,6 +49,7 @@ public class Serializer implements Runnable {
 	private Neo4jConnectionManager dbms = null;
 	private GitlabRestClient gitUtils = null;
 	private List<String> librariesList = new ArrayList<String>();
+	private List<String> schemasList = new ArrayList<String>();
 	int pushDelay = 30000;  // 60000 = 1 minute
 	PathMap pathMap = new PathMap();
 
@@ -52,33 +57,56 @@ public class Serializer implements Runnable {
 			String user
 			, String pwd
 			, String url
-			, String whereClause
+			, String gitlabGroup
+			, String whereLibraryClause
 			, String whereLibraries
+			, String whereSchemaClause
+			, String whereSchemas
 			, String repoDomain
 			, String repoUser
 			, String repoToken
 			, int pushDelay
 			, boolean debugEnabled
 			, boolean reinit
+			, boolean pushEnabled
 			) {
 		this.user = user;
 		this.pwd = pwd;
 		this.url = url;
+		if (gitlabGroup == null || gitlabGroup.length() == 0) {
+			// ignore
+		} else {
+			this.gitlabGroup = gitlabGroup;
+		}
 		this.gitPath = Constants.GIT_FOLDER;
 		this.pushDelay = pushDelay;
 		try {
 			this.gitUtils = new GitlabRestClient(repoDomain,repoToken);
 		} catch (RestInitializationException e) {
-			// TODO Auto-generated catch block
-			e.printStackTrace();
+			ErrorUtils.report(logger, e);
 		}
-		this.whereClause = whereClause;
+		this.whereLibraryClause = whereLibraryClause;
 		this.whereLibraries = whereLibraries;
+		this.whereSchemaClause = whereSchemaClause;
+		this.whereSchemas = whereSchemas;
 		this.repoDomain = repoDomain;
 		this.repoUser = repoUser;
 		this.repoToken = repoToken;
 		this.debugEnabled = debugEnabled;
 		this.reinit = reinit;
+		this.pushEnabled = pushEnabled;
+		this.loadSchemasList();
+	}
+	
+	private void loadSchemasList() {
+		try {
+			String [] parts = this.whereSchemas.split(",");
+			for (String schema : parts) {
+				this.schemasList.add(schema.trim());
+			}
+		} catch (Exception e) {
+			ErrorUtils.report(logger, e);
+		}
 	}
 	
 	@Override
@@ -98,11 +126,11 @@ public class Serializer implements Runnable {
 		 int processed = 0;
 		 
 		 if (this.reinit) {
-			 this.gitUtils.deleteAllProjectsInGroup("serialized/db2ares");
-			 this.gitUtils.deleteAllProjectsInGroup("serialized/db2json/gr_gr_cog");
-			 this.gitUtils.deleteAllProjectsInGroup("serialized/db2json/links");
-			 this.gitUtils.deleteAllProjectsInGroup("serialized/db2json/linkprops");
-			 this.gitUtils.deleteAllProjectsInGroup("serialized/db2json/nodes");
+			 this.gitUtils.deleteAllProjectsInGroup(this.gitlabGroup + "/db2ares");
+			 this.gitUtils.deleteAllProjectsInGroup(this.gitlabGroup + "/db2json/gr_gr_cog");
+			 this.gitUtils.deleteAllProjectsInGroup(this.gitlabGroup + "/db2json/links");
+			 this.gitUtils.deleteAllProjectsInGroup(this.gitlabGroup + "/db2json/linkprops");
+			 this.gitUtils.deleteAllProjectsInGroup(this.gitlabGroup + "/db2json/nodes");
 		 }
 		 
 		 for (String library : this.librariesList) {
@@ -119,7 +147,8 @@ public class Serializer implements Runnable {
 		this.sendMessage(startMsg);
 		this.sendMessage(finishMsg);
 		String out = this.gitPath 
-				+ "serialized/serializer.log"; 
+				+ this.gitlabGroup 
+				+ "/serializer.log"; 
 		try {
 			FileUtils.write(new File(out), startMsg + "\n" + finishMsg);
 		} catch (IOException e) {
@@ -150,39 +179,44 @@ public class Serializer implements Runnable {
 		SerializerApp.sendMessage(m);
 	}
 
-	private void processLibrary(String library, int libNbr, int totalLibs) {
-		try {
-			Thread.sleep(this.pushDelay);
-			this.writeAges(Constants.PROJECT_DB2ARES , library, libNbr, totalLibs);
-			Thread.sleep(this.pushDelay);
-			this.writeNodes2Json(Constants.PROJECT_DB2JSON_NODES, library, libNbr, totalLibs);
-			Thread.sleep(this.pushDelay);
-			this.writeLinks2Json(Constants.PROJECT_DB2JSON_LINKS, library, libNbr, totalLibs);
-			Thread.sleep(this.pushDelay);
-			if (library.equals("gr_gr_cog")) {
-				this.writeLinkProps2Json(Constants.PROJECT_DB2JSON_LINK_PROPS, library, libNbr, totalLibs);
+	private synchronized void sleep() {
+		if (this.pushEnabled) {
+			try {
+				Thread.sleep(this.pushDelay);
+			} catch (InterruptedException e) {
 			}
-		} catch (InterruptedException e) {
-			// TODO Auto-generated catch block
-			e.printStackTrace();
 		}
 	}
+	private synchronized void processLibrary(String library, int libNbr, int totalLibs) {
+		if (! library.equals("en_sys_linguistics")) {
+			this.writeDb2ares(Constants.PROJECT_DB2ARES , library, libNbr, totalLibs);
+			this.sleep();
+		}
+		this.writeNodes2Json(Constants.PROJECT_DB2JSON_NODES, library, libNbr, totalLibs);
+		this.sleep();
+		this.writeLinks2Json(Constants.PROJECT_DB2JSON_LINKS, library, libNbr, totalLibs);
+		this.sleep();
+		if (library.equals("gr_gr_cog")) {
+			this.writeLinkProps2Json(Constants.PROJECT_DB2JSON_LINK_PROPS, library, libNbr, totalLibs);
+		}
+		this.sleep();
+		this.writeJson2csv(Constants.PROJECT_JSON2CSV, library, libNbr, totalLibs);
+	}
+	
 	/**
 	 * If libraries were specified for either inclusion or exclusion
 	 * in the environmental properties, we will use them.
 	 * 
 	 * Otherwise we will create the list by querying the database.
 	 * 
-	 * This list will exclude en_sys_linguistics.  It will be handled separately
-	 * as a special case.
 	 */
 	private void createLibrariesList() {
 	    StringBuffer sb = new StringBuffer();
 		sb.append("match (n:Root)");
-		if (this.whereClause.length() > 0 && this.whereLibraries.length() > 0) {
-			if (this.whereClause.equals("WHERE")) {
+		if (this.whereLibraryClause.length() > 0 && this.whereLibraries.length() > 0) {
+			if (this.whereLibraryClause.equals("WHERE")) {
 				sb.append(" where n.library in [");
-			} else if (this.whereClause.equals("WHERE_NOT")) {
+			} else if (this.whereLibraryClause.equals("WHERE_NOT")) {
 				sb.append(" where not n.library in [");
 			}
 	    	String [] parts = this.whereLibraries.split(",");
@@ -197,9 +231,9 @@ public class Serializer implements Runnable {
 	    	}
 	    	sb.append(sbLibs.toString());
 	    	sb.append("]");
-		    sb.append(" and not n.library = 'en_sys_linguistics' return distinct n.library as lib order by lib;");
+		    sb.append(" return distinct n.library as lib order by lib;");
 		} else {
-			sb.append("match (n:Root) where not n.library = 'en_sys_linguistics' return distinct n.library as lib");
+			sb.append("match (n:Root) return distinct n.library as lib order by lib");
 		}
 		
 		ResultJsonObjectArray result = dbms.getForQuery(sb.toString());
@@ -214,6 +248,25 @@ public class Serializer implements Runnable {
 		}
 	}
 	
+	private boolean includeSchema(String schema) {
+		if (this.schemasList.size() > 0) {
+			if (this.whereSchemaClause.equals("WHERE")) {
+				if (this.schemasList.contains(schema)) {
+					return true;
+				} else {
+					return false;
+				}
+			} else {  // WHERE_NOT
+				if (this.schemasList.contains(schema)) {
+					return false;
+				} else {
+					return true;
+				}
+			}
+		} else {
+			return true;
+		}
+	}
 	/**
 	 * Writes nodes for each library~topic to a single json file
 	 * for that topic
@@ -225,87 +278,192 @@ public class Serializer implements Runnable {
 			, int totalLibs
 			) {
 		Instant start = Instant.now();
-		if (this.debugEnabled) {
-			logger.info(Instant.now().toString() + " db2json nodes processing " + library);
-		}
-		this.preProcessLibrary(groupPath, library);
-		StringBuffer sb = new StringBuffer();
+			if (this.debugEnabled) {
+				logger.info(Instant.now().toString() + " db2json nodes processing " + library);
+			}
+			int processed = 0;
+			this.preProcessLibrary(groupPath, library);
+			StringBuffer sb = new StringBuffer();
 			sb.append("match (n:Root) where n.library = '");
 			sb.append(library);
-			sb.append("' return distinct n.topic as topic order by n.topic;");
-			ResultJsonObjectArray result = dbms.getForQuery(sb.toString());
-			long processed = 0;
-			long total = result.valueCount;
-			
-			for (JsonObject o : result.getValues()) {
-				try {
-					if (o != null && o.has("topic"))  {
-						String topic = o.get("topic").getAsString();
-						String topicQuery = "match (n:Root) where n.id starts with '" + library + "~" + topic + "~" + "' return properties(n) as props;";
-						ResultJsonObjectArray topics = dbms.getForQuery(topicQuery);
-						if (topics.valueCount > 0) {
-							String path = "";
-							if (library.equals("en_sys_linguistics")) {
-								if (topic.toLowerCase().contains("wordinflected")) {
-									path = "WordInflected/" + topic + ".json";
-								} else if (topic.toLowerCase().contains("perseus") || topic.startsWith("urn")) {
-									topic = topic.toLowerCase();
-									topic = topic.replaceAll(":", "/");
-									topic = topic.replaceAll("\\.", "/");
-									topic = topic.replaceAll("~", "/");
-									if (topic.startsWith("tlg")) {
-										topic = "perseus/" + topic;
-									}
-									path = topic + ".json";
-								} else if (topic.contains("~")) {
-									topic = topic.replaceAll("~", "/");
-									path = topic  + ".json";
-								} else {
-									if (topic.length() > 0) {
-										if (topic.length() > 3) {
-											path = "tokens/"  + topic.substring(0, 1) + "/" + topic.substring(0, 2) + "/"  + topic.substring(0, 3) + "/" + topic + ".json";
-										} else if (topic.length() > 2) {
-											path = "tokens/"  + topic.substring(0, 1) + "/" + topic.substring(0, 2) + "/" + topic + ".json";
+			sb.append("' return distinct n._valueSchemaId as schema order by schema;");
+			ResultJsonObjectArray schemaResult = dbms.getForQuery(sb.toString());
+			for (JsonObject s : schemaResult.getValues()) {
+				if (s != null && s.has("schema")) {
+					String schema = s.get("schema").getAsString();
+					String label = schema.substring(0, schema.length()-4);
+					if (this.includeSchema(label)) {
+						String topicQuery = "match (n:Root) where n.id starts with '" + library + "' and n._valueSchemaId = '" + schema + "' return distinct n.topic as topic;";
+						ResultJsonObjectArray topicResult = dbms.getForQuery(topicQuery);
+						for (JsonObject t : topicResult.getValues()) {
+							if (t != null && t.has("topic"))  {
+								String topic = t.get("topic").getAsString();
+								String topicSchemaQuery = "match (n:Root) where n.id starts with '" + library + "~" + topic + "~" + "' and n._valueSchemaId = '" + schema + "' return properties(n) as props;";
+								ResultJsonObjectArray topicSchemaResult = dbms.getForQuery(topicSchemaQuery);
+								try {
+									String path = "";
+									if (library.equals("en_sys_linguistics")) {
+										if (topic.toLowerCase().contains("wordinflected")) {
+											path = "WordInflected/" + topic + ".json";
+										} else if (topic.toLowerCase().contains("wordanalysis")) {
+												path = "WordAnalysis/" + topic + ".json";
+										} else if (topic.toLowerCase().contains("perseus") || topic.startsWith("urn")) {
+											topic = topic.toLowerCase();
+											topic = topic.replaceAll(":", "/");
+											topic = topic.replaceAll("\\.", "/");
+											topic = topic.replaceAll("~", "/");
+											if (topic.startsWith("tlg")) {
+												topic = "perseus/" + topic;
+											}
+											path = topic + ".json";
+										} else if (topic.contains("~")) {
+											topic = topic.replaceAll("~", "/");
+											path = topic  + ".json";
 										} else {
-											path = "tokens/" + topic.substring(0, 1) + "/" + topic + ".json";
+											if (topic.length() > 0) {
+												if (topic.length() > 3) {
+													path = "tokens/"  + topic.substring(0, 1) + "/" + topic.substring(0, 2) + "/"  + topic.substring(0, 3) + "/" + topic + ".json";
+												} else if (topic.length() > 2) {
+													path = "tokens/"  + topic.substring(0, 1) + "/" + topic.substring(0, 2) + "/" + topic + ".json";
+												} else if (topic.length() > 1) {
+													path = "tokens/" + topic.substring(0, 1) + "/" + topic + ".json";
+												} else {
+													switch (topic) {
+													case ("\\"): {
+														path = "tokens/punct/backslash.json";
+														break;
+													}
+													case ("."): {
+														path = "tokens/punct/period.json";
+														break;
+													}
+													case (","): {
+														path = "tokens/punct/comma.json";
+														break;
+													}
+													case (";"): {
+														path = "tokens/punct/semicolon.json";
+														break;
+													}
+													case ("!"): {
+														path = "tokens/punct/banger.json";
+														break;
+													}
+													case (":"): {
+														path = "tokens/punct/colon.json";
+														break;
+													}
+													case ("·"): {
+														path = "tokens/punct/uppertelia.json";
+														break;
+													}
+													case ("?"): {
+														path = "tokens/punct/question.json";
+														break;
+													}
+													case ("-"): {
+														path = "tokens/punct/dash.json";
+														break;
+													}
+													case ("_"): {
+														path = "tokens/punct/underscore.json";
+														break;
+													}
+													case ("~"): {
+														path = "tokens/punct/tilde.json";
+														break;
+													}
+													case ("("): {
+														path = "tokens/punct/leftparen.json";
+														break;
+													}
+													case (")"): {
+														path = "tokens/punct/rightparen.json";
+														break;
+													}
+													case (">"): {
+														path = "tokens/punct/greaterthan.json";
+														break;
+													}
+													case ("<"): {
+														path = "tokens/punct/lessthan.json";
+														break;
+													}
+													case ("|"): {
+														path = "tokens/punct/pipe.json";
+														break;
+													}
+													case ("{"): {
+														path = "tokens/punct/leftbrace.json";
+														break;
+													}
+													case ("}"): {
+														path = "tokens/punct/rightbrace.json";
+														break;
+													}
+													case ("["): {
+														path = "tokens/punct/leftbracket.json";
+														break;
+													}
+													case ("]"): {
+														path = "tokens/punct/rightbracket.json";
+														break;
+													}
+													case ("*"): {
+														path = "tokens/punct/asterisk.json";
+														break;
+													}
+													default: {
+														path = "tokens/" + topic.substring(0, 1) + "/" + topic + ".json";
+													}
+													}
+												}
+											} else {
+												path = "tokens" + "/" + topic + ".json";
+											}
 										}
 									} else {
-										path = "tokens" + "/" + topic + ".json";
+										topic = topic.toLowerCase();
+										topic = topic.replaceAll(":", "/");
+										topic = topic.replaceAll("\\.", "/");
+										topic = topic.replaceAll("~", "/");
+										path =  topic + ".json";
 									}
+									processed++;
+									String out = this.gitPath 
+											+ groupPath 
+											+ "/" + library 
+											+ "/" + label 
+											+ "/" + path;
+									FileUtils.write(new File(out),topicSchemaResult.getValuesAsJsonArray().toString());
+									if (this.debugEnabled) {
+										logger.info(Instant.now().toString() + " " + processed + " - " + out);
+									}
+								} catch (Exception e) {
+									ErrorUtils.report(logger, e);
 								}
-							} else {
-								topic = topic.toLowerCase();
-								topic = topic.replaceAll(":", "/");
-								topic = topic.replaceAll("\\.", "/");
-								topic = topic.replaceAll("~", "/");
-								path =  topic + ".json";
-							}
-							processed++;
-							String out = this.gitPath 
-									+ groupPath 
-									+ "/" + library 
-									+ "/" + topic + ".json";
-							FileUtils.write(new File(out),topics.getValuesAsJsonArray().toString());
-							if (this.debugEnabled) {
-								logger.info(Instant.now().toString() + " " + processed + " of " + total + " - " + out);
 							}
 						}
 					}
-				} catch (Exception e) {
-					System.out.println(o.toString());
-					e.printStackTrace();
 				}
 			}
-			this.gitUtils.gitAddCommitPush(
-					this.gitPath + groupPath
-					, "olwsys"
-					, library
-					, "."
-					, Instant.now().toString() + ".Serialized nodes to json." + this.getElapsedMessage(start)
-					);
+			if (this.pushEnabled) {
+				File libFile = new File(this.gitPath + groupPath + "/" + library);
+				if (libFile.exists()) {
+					this.gitUtils.gitAddCommitPush(
+							this.gitPath + groupPath
+							, "olwsys"
+							, library
+							, "."
+							, Instant.now().toString() + ".Serialized nodes to json." + this.getElapsedMessage(start)
+							);
+					logger.info("Pushed " + this.gitPath + groupPath + "/" + library + "." + Instant.now().toString() + ".Serialized." + this.getElapsedMessage(start));
+				}
+			} else {
+				logger.info("Simulated push " + this.gitPath + groupPath + Instant.now().toString() + ".Serialized nodes to json." + this.getElapsedMessage(start));
+			}
 		 	logger.info(Instant.now().toString() + " db2json nodes finished processing " + library);
 		}
-	
 	
 	/**
 	 * Writes links to a single json file
@@ -323,42 +481,74 @@ public class Serializer implements Runnable {
 		}
 		this.preProcessLibrary(groupPath, library);
 		StringBuffer sb = new StringBuffer();
-		sb.append("match (f:Root)-[r]->(:Root) where f.library = '");
-		sb.append(library);
-		sb.append("' return distinct f.topic + '|' + type(r) as libType order by libType;");
-		ResultJsonObjectArray libTypes = dbms.getForQuery(sb.toString());
-		for (JsonObject libType : libTypes.getValues()) {
-			String [] parts = libType.get("libType").getAsString().split("\\|");
-			if (parts.length == 2) {
-				String topic = parts[0];
-				String type = parts[1];
-				StringBuffer ltSb = new StringBuffer();
-				ltSb.append("match (f:Root)-[r:");
-				ltSb.append(type);
-				ltSb.append("]->(t:Root) where f.id starts with  '");
-				ltSb.append(library);
-				ltSb.append("~");
-				ltSb.append(topic);
-				ltSb.append("' return f.id as from, type(r) as type, t.id as to order by f.id;");
-				String topicPath = topic.replaceAll("\\.", "/");
-				topicPath = topicPath.replaceAll("-", "/");
-				topicPath = topicPath.replaceAll("~", "/");
-				ResultJsonObjectArray result = dbms.getForQuery(ltSb.toString());
-				String out = this.gitPath 
-						+ groupPath 
-						+ "/" + library 
-						+ "/" + topicPath 
-						+ "/" + topic + ".json";
-				try {
-					FileUtils.write(new File(out),result.getValuesAsJsonArray().toString());
-				} catch (Exception e) {
-					ErrorUtils.report(logger, e);
+		sb.append("match (f:Root)-[r]->(t:Root) return distinct t._valueSchemaId as schema order by schema;");
+		ResultJsonObjectArray schemaResult = dbms.getForQuery(sb.toString());
+		for (JsonObject s : schemaResult.getValues()) {
+			if (s != null && s.has("schema")) {
+				String schema = s.get("schema").getAsString();
+				String label = schema.substring(0, schema.length()-4);
+				if (this.includeSchema(label)) {
+					sb = new StringBuffer();
+					sb.append("match (f:Root)-[r]->(t:Root) where f.library = '");
+					sb.append(library);
+					sb.append("' and t._valueSchemaId = '");
+					sb.append(schema);
+					sb.append("' return distinct f.topic + '|' + type(r) as libType order by libType;");
+					ResultJsonObjectArray libTypes = dbms.getForQuery(sb.toString());
+					for (JsonObject libType : libTypes.getValues()) {
+						String [] parts = libType.get("libType").getAsString().split("\\|");
+						if (parts.length == 2) {
+							String topic = parts[0];
+							String type = parts[1];
+							StringBuffer ltSb = new StringBuffer();
+							ltSb.append("match (f:Root)-[r:");
+							ltSb.append(type);
+							ltSb.append("]->(t:Root) where f.id starts with  '");
+							ltSb.append(library);
+							ltSb.append("~");
+							ltSb.append(topic);
+							ltSb.append("' return f.id as from, type(r) as type, t.id as to order by f.id;");
+							String topicPath = topic.replaceAll("\\.", "/");
+							topicPath = topicPath.replaceAll("-", "/");
+							topicPath = topicPath.replaceAll("~", "/");
+							ResultJsonObjectArray result = dbms.getForQuery(ltSb.toString());
+							String out = this.gitPath 
+									+ groupPath 
+									+ "/" + library 
+									+ "/" + topicPath 
+									+ "/" + topic + ".json";
+							try {
+								FileUtils.write(new File(out),result.getValuesAsJsonArray().toString());
+								if (this.debugEnabled) {
+									logger.info(Instant.now().toString() + " wrote links to "  + " - " + out);
+								}
+							} catch (Exception e) {
+								ErrorUtils.report(logger, e);
+							}
+						} else {
+							logger.error("Unexpected libType parts length for " + libType);
+						}
+					}
 				}
-			} else {
-				logger.error("Unexpected libType parts length for " + libType);
 			}
+		 	logger.info(Instant.now().toString() + " db2json links finished processing " + library);
 		}
-		gitUtils.gitAddCommitPush(this.gitPath + groupPath, "olwsys", library, ".", Instant.now().toString() + ".Serialized." + this.getElapsedMessage(start));
+		
+		if (this.pushEnabled) {
+			File libFile = new File(this.gitPath + groupPath + "/" + library);
+			if (libFile.exists()) {
+				gitUtils.gitAddCommitPush(
+						this.gitPath + groupPath
+						, "olwsys"
+						, library
+						, "."
+						, Instant.now().toString() + ".Serialized." + this.getElapsedMessage(start)
+						);
+				logger.info("Pushed " + this.gitPath + groupPath + "/" + library + "." + Instant.now().toString() + ".Serialized." + this.getElapsedMessage(start));
+			}
+		} else {
+			logger.info("Simulated push " + this.gitPath + groupPath + Instant.now().toString() + ".Serialized." + this.getElapsedMessage(start));
+		}
 	}
 	
 	/**
@@ -389,20 +579,46 @@ public class Serializer implements Runnable {
 								FileUtils.write(new File(out),props.toString());
 							}
 						}
-						this.gitUtils.gitAddCommitPush(
-								this.gitPath 
-								+ groupPath
-								, "olwsys"
-								, library
-								, "."
-								, Instant.now().toString() + ".Serializer." + type + "."  + this.getElapsedMessage(start)
-								);
+						if (this.pushEnabled) {
+							File libFile = new File(this.gitPath + groupPath + "/" + library);
+							if (libFile.exists()) {
+								this.gitUtils.gitAddCommitPush(
+										this.gitPath 
+										+ groupPath
+										, "olwsys"
+										, library
+										, "."
+										, Instant.now().toString() + ".Serializer." + type + "."  + this.getElapsedMessage(start)
+										);
+								logger.info("Pushed " + this.gitPath + groupPath + "/" + library + "." + Instant.now().toString() + ".Serialized." + this.getElapsedMessage(start));
+							}
+						} else {
+							logger.info("Simulated push " 
+									+ this.gitPath 
+									+ groupPath
+									+ Instant.now().toString() 
+									+ ".Serializer." + type + "."  
+									+ this.getElapsedMessage(start)
+									);
+						}
 					}
 				} catch (Exception e) {
 					ErrorUtils.report(logger, e);
 				}
 			}
 	}
+
+	private synchronized void writeJson2csv(String groupPath, String library, int libNbr, int totalLibs) {
+	    Instant start = Instant.now();
+	 	logger.info(Instant.now().toString() + " Writing Link Properties to Json");
+		String fullPath = this.gitPath + Constants.PROJECT_DB2JSON_NODES + "/" + library;
+		for (File f : org.ocmc.ioc.liturgical.utils.FileUtils.getFilesFromSubdirectories(fullPath, "json")) {
+			try {
+			} catch (Exception e) {
+				ErrorUtils.report(logger, e);
+			}
+		}
+   }
 
 	private void preProcessLibrary(String group, String library) {
 		String fullPath = group + "/" + library;
@@ -427,13 +643,17 @@ public class Serializer implements Runnable {
 		}
 		if (f.exists()) {
 			gitUtils.pullGitlabProject(this.gitPath + group, this.repoDomain, group, library);
+			logger.info("Pulled " + this.gitPath + group + "/" + library);
 		} else {
 			try {
 				FileUtils.forceMkdir(f.getParentFile());
 				if (! this.gitUtils.existsProject(group + "/" + library)) {
 					ResultJsonObjectArray createResult = this.gitUtils.postProject(group, library);
+					logger.info("Posted " + group + "/" + library);
+					logger.info(createResult.status.developerMessage);
 				}
 				gitUtils.cloneGitlabProject(this.gitPath + group, this.repoDomain, group, library);
+				logger.info("Cloned " + this.gitPath + group + "/" + library);
 			} catch (IOException e) {
 				ErrorUtils.report(logger, e);
 			}
@@ -444,7 +664,7 @@ public class Serializer implements Runnable {
 	 * AGES libraries to ares format and writes
 	 * the ares files
 	 */
-	private void writeAges(String groupPath, String library, int libNbr, int totalLibs) {
+	private void writeDb2ares(String groupPath, String library, int libNbr, int totalLibs) {
 		try {
 			Instant start = Instant.now();
 			String fullPath = groupPath + "/" + library;
@@ -518,7 +738,11 @@ public class Serializer implements Runnable {
 					 } else {
 							if (value.length() > 0) {
 								String quoted = LibraryUtils.wrapQuotes(value);
-								quoted = quoted.replaceAll("\\\\", "\\");
+								try {
+									quoted = quoted.replaceAll("\\\\\"", "\\\"");
+								} catch (Exception e) {
+									e.getMessage();
+								}
 								sb.append(quoted);
 							} else  {
 								sb.append("\"\"");
@@ -549,15 +773,22 @@ public class Serializer implements Runnable {
 							);
 				}
 			}
-			gitUtils.gitAddCommitPush(
-					this.gitPath + groupPath
-					, "olwsys"
-					, library, "."
-					, Instant.now().toString() + ".Serialized." + this.getElapsedMessage(start)
-					);
+			if (this.pushEnabled) {
+				File libFile = new File(this.gitPath + groupPath + "/" + library);
+				if (libFile.exists()) {
+					gitUtils.gitAddCommitPush(
+							this.gitPath + groupPath
+							, "olwsys"
+							, library, "."
+							, Instant.now().toString() + ".Serialized." + this.getElapsedMessage(start)
+							);
+					logger.info("Pushed " + this.gitPath + groupPath + "/" + library + "." + Instant.now().toString() + ".Serialized." + this.getElapsedMessage(start));
+				}
+			} else {
+				logger.info("Simulated push " + this.gitPath + groupPath + Instant.now().toString() + ".Serialized." + this.getElapsedMessage(start));
+			}
 		} catch (Exception e) {
 			ErrorUtils.report(logger, e);
 		}
 	}
-	
 }

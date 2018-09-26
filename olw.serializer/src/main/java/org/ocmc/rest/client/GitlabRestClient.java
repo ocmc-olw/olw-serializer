@@ -7,6 +7,7 @@ import java.io.InputStreamReader;
 import org.eclipse.jgit.util.FileUtils;
 import org.ocmc.ioc.liturgical.schemas.constants.HTTP_RESPONSE_CODES;
 import org.ocmc.ioc.liturgical.schemas.models.ws.response.ResultJsonObjectArray;
+import org.ocmc.ioc.liturgical.utils.ErrorUtils;
 
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
@@ -55,23 +56,33 @@ public class GitlabRestClient extends GenericRestClient {
 
     public ResultJsonObjectArray cloneAllProjectsInGroup(String dir, String user, String group) {
     	ResultJsonObjectArray result = new ResultJsonObjectArray(false);
-    	ResultJsonObjectArray groupsQuery = this.getGroups();
-    	if (groupsQuery.getStatus().code == HTTP_RESPONSE_CODES.OK.code) {
-    		for (JsonObject go : groupsQuery.values) {
-    			String goGroup = go.get("full_path").getAsString();
-    			if (goGroup.startsWith(group)) {
-                	ResultJsonObjectArray groupQuery = this.getGroup(goGroup);
-                	if (groupQuery.getStatus().code == HTTP_RESPONSE_CODES.OK.code) {
-                		JsonObject o = groupQuery.getFirstObjectValueAsObject();
-                		JsonArray projects = o.get("projects").getAsJsonArray();
-                		for (JsonElement e : projects) {
-                			JsonObject po = e.getAsJsonObject();
-                			String project = po.get("name").getAsString();
-                			this.cloneGitlabProject(dir + "/" + goGroup, goGroup, project);
-                		}
-                	}
-    			}
+    	try {
+    		File dirFile = new File(dir);
+    		if (dirFile.exists()) {
+        		org.apache.commons.io.FileUtils.cleanDirectory(new File(dir));
+    		} else {
+    			FileUtils.mkdirs(dirFile);
     		}
+        	ResultJsonObjectArray groupsQuery = this.getGroups();
+        	if (groupsQuery.getStatus().code == HTTP_RESPONSE_CODES.OK.code) {
+        		for (JsonObject go : groupsQuery.values) {
+        			String goGroup = go.get("full_path").getAsString();
+        			if (goGroup.startsWith(group)) {
+                    	ResultJsonObjectArray groupQuery = this.getGroup(goGroup);
+                    	if (groupQuery.getStatus().code == HTTP_RESPONSE_CODES.OK.code) {
+                    		JsonObject o = groupQuery.getFirstObjectValueAsObject();
+                    		JsonArray projects = o.get("projects").getAsJsonArray();
+                    		for (JsonElement e : projects) {
+                    			JsonObject po = e.getAsJsonObject();
+                    			String project = po.get("name").getAsString();
+                    			this.cloneGitlabProject(dir + "/" + goGroup, goGroup, project);
+                    		}
+                    	}
+        			}
+        		}
+        	}
+    	} catch (Exception e) {
+    		e.printStackTrace();
     	}
     	return result;
     }

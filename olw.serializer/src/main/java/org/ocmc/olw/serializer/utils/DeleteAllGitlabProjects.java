@@ -1,6 +1,5 @@
 package org.ocmc.olw.serializer.utils;
 
-import org.ocmc.olw.serializer.GitlabUtils;
 import org.ocmc.rest.client.GitlabRestClient;
 import org.ocmc.rest.client.RestInitializationException;
 

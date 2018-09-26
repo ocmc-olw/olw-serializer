@@ -64,13 +64,15 @@ public class SerializerApp {
     		String db_pwd =      System.getenv("DB_PWD");
     		String db_url =         System.getenv("DB_URL");
        		
-       		boolean badWhere = false;
+    		String gitlabGroup =         System.getenv("GITLAB_GROUP");
+
+    		boolean badWhere = false;
        		
-    		String whereClause = System.getenv("WHERE_CLAUSE");
-    		if (whereClause == null) {
-    			whereClause = "";
+    		String whereLibrariesClause = System.getenv("WHERE_LIBRARIES_CLAUSE");
+    		if (whereLibrariesClause == null) {
+    			whereLibrariesClause = "";
     		} else {
-    			if (whereClause.equals("WHERE") || whereClause.equals("WHERE_NOT")) {
+    			if (whereLibrariesClause.equals("WHERE") || whereLibrariesClause.equals("WHERE_NOT")) {
     				// OK
     			} else {
     				badWhere = true;
@@ -79,10 +81,29 @@ public class SerializerApp {
 
     		String whereLibraries = System.getenv("WHERE_LIBRARIES");
     		if (whereLibraries == null) {
-    			if (whereClause.length() > 0) {
+    			if (whereLibrariesClause.length() > 0) {
     				badWhere = true;
     			}
     			whereLibraries = "";
+    		}
+
+    		String whereSchemasClause = System.getenv("WHERE_SCHEMAS_CLAUSE");
+    		if (whereSchemasClause == null) {
+    			whereSchemasClause = "";
+    		} else {
+    			if (whereSchemasClause.equals("WHERE") || whereSchemasClause.equals("WHERE_NOT")) {
+    				// OK
+    			} else {
+    				badWhere = true;
+    			}
+    		}
+
+    		String whereSchemas = System.getenv("WHERE_SCHEMAS");
+    		if (whereSchemas == null) {
+    			if (whereSchemasClause.length() > 0) {
+    				badWhere = true;
+    			}
+    			whereSchemas = "";
     		}
 
     		int initialDelay       = 1;
@@ -126,6 +147,7 @@ public class SerializerApp {
     		boolean serviceEnabled = true;
     		boolean debugEnabled = false;
     		boolean reinitEnabled = false;
+    		boolean pushEnabled = true;
 
     		String propServiceEnabled = System.getenv("SERVICE_ENABLED");
     		if (propServiceEnabled != null && propServiceEnabled.toLowerCase().equals("false")) {
@@ -140,6 +162,11 @@ public class SerializerApp {
     		String propReinitEnabled = System.getenv("REINIT");
     		if (propReinitEnabled != null && propReinitEnabled.toLowerCase().equals("true")) {
     			reinitEnabled = true;
+    		}
+
+    		String propPushEnabled = System.getenv("PUSH_ENABLED");
+    		if (propPushEnabled != null && propPushEnabled.toLowerCase().equals("false")) {
+    			pushEnabled = false;
     		}
 
     		String propMessagingEnabled = System.getenv("MSG_ENABLED");
@@ -184,13 +211,15 @@ public class SerializerApp {
 	       			logger.info("SERVICE_ENABLED = " + serviceEnabled);
 	       			logger.info("DB_URL = " + db_url);
 	       			logger.info("GIT_PATH = " + Constants.GIT_FOLDER);
-	       			logger.info("WHERE_CLAUSE = " + whereClause);
+	       			logger.info("WHERE_CLAUSE = " + whereLibrariesClause);
 	       			logger.info("WHERE_LIBRARIES = " + whereLibraries);
 	       			logger.info("INITIAL_DELAY = " + initialDelay);
 	       			logger.info("PERIOD = " + period);
 	       			logger.info("TIME_UNIT = " + timeUnit);
 	       			logger.info("MSG_ENABLED = " + messagingEnabled);
 	       			logger.info("DEBUG_ENABLED = " + debugEnabled);
+	       			logger.info("REINIT_ENABLED = " + reinitEnabled);
+	       			logger.info("PUSH_ENABLED = " + pushEnabled);
 	       			
 	       			if (serviceEnabled) {
 	   					executorService.scheduleAtFixedRate(
@@ -198,14 +227,18 @@ public class SerializerApp {
 	   									db_usr
 	   									, db_pwd
 	   									, db_url 
-	   									, whereClause
+	   									, gitlabGroup
+	   									, whereLibrariesClause
 	   									, whereLibraries 
+	   									, whereSchemasClause
+	   									, whereSchemas 
 	   									, repoDomain
 	   									, repoUser
 	   									, repoToken
 	   									, pushDelay
 	   									, debugEnabled
 	   									, reinitEnabled
+	   									, pushEnabled
 	   									)
 	   							, initialDelay
 	   							, period

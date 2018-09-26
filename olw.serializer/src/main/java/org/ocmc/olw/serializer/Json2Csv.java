@@ -8,18 +8,12 @@ import java.util.ArrayList;
 import java.util.List;
 
 import org.apache.commons.io.FileUtils;
-import org.apache.commons.lang3.StringUtils;
-import org.ocmc.ioc.liturgical.schemas.id.managers.IdManager;
 import org.ocmc.ioc.liturgical.schemas.models.ws.response.ResultJsonObjectArray;
 import org.ocmc.ioc.liturgical.utils.ErrorUtils;
 import org.ocmc.rest.client.GitlabRestClient;
 import org.ocmc.rest.client.RestInitializationException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
-import com.google.gson.JsonObject;
-
-import net.ages.alwb.utils.core.datastores.neo4j.Neo4jConnectionManager;
 
 /**
  * Converts db2json to csv that can be
