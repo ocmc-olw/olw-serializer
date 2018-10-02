@@ -114,6 +114,7 @@ public class Neo4jConnectionManager implements LowLevelDataStoreInterface {
 			  }
 		  } catch (Exception e) {
 			  logger.error(e.getMessage());
+			  e.printStackTrace();
 		  }
 	  }
 	  

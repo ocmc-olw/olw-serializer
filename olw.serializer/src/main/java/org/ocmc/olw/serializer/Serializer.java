@@ -12,6 +12,7 @@ import org.apache.commons.lang3.StringUtils;
 import org.ocmc.ioc.liturgical.schemas.id.managers.IdManager;
 import org.ocmc.ioc.liturgical.schemas.models.ws.response.ResultJsonObjectArray;
 import org.ocmc.ioc.liturgical.utils.ErrorUtils;
+import org.ocmc.olw.serializer.utils.Json2Csv;
 import org.ocmc.rest.client.GitlabRestClient;
 import org.ocmc.rest.client.RestInitializationException;
 import org.slf4j.Logger;
@@ -40,6 +41,9 @@ public class Serializer implements Runnable {
 	String whereSchemas = "";
 	boolean debugEnabled = false;
 	boolean pushEnabled = true;
+	boolean db2jsonEnabled = true;
+	boolean db2aresEnabled = true;
+	boolean db2csvEnabled = true;
 	boolean reinit = false;
 	File gitFolder = null;
 	String gitPath = "";
@@ -52,6 +56,10 @@ public class Serializer implements Runnable {
 	private List<String> schemasList = new ArrayList<String>();
 	int pushDelay = 30000;  // 60000 = 1 minute
 	PathMap pathMap = new PathMap();
+	int totalNodeCount = 0;
+	int totalSkippedNodeCount = 0;
+	int totalLinkCount = 0;
+	int totalSkippedLinkCount = 0;
 
 	public Serializer(
 			String user
@@ -66,6 +74,9 @@ public class Serializer implements Runnable {
 			, String repoUser
 			, String repoToken
 			, int pushDelay
+			, boolean db2aresEnabled
+			, boolean db2jsonEnabled
+			, boolean db2csvEnabled
 			, boolean debugEnabled
 			, boolean reinit
 			, boolean pushEnabled
@@ -92,6 +103,9 @@ public class Serializer implements Runnable {
 		this.repoDomain = repoDomain;
 		this.repoUser = repoUser;
 		this.repoToken = repoToken;
+		this.db2aresEnabled = db2aresEnabled;
+		this.db2jsonEnabled = db2jsonEnabled;
+		this.db2csvEnabled = db2csvEnabled;
 		this.debugEnabled = debugEnabled;
 		this.reinit = reinit;
 		this.pushEnabled = pushEnabled;
@@ -102,7 +116,9 @@ public class Serializer implements Runnable {
 		try {
 			String [] parts = this.whereSchemas.split(",");
 			for (String schema : parts) {
-				this.schemasList.add(schema.trim());
+				if (schema.trim().length() > 0) {
+					this.schemasList.add(schema.trim());
+				}
 			}
 		} catch (Exception e) {
 			ErrorUtils.report(logger, e);
@@ -114,6 +130,20 @@ public class Serializer implements Runnable {
 		Instant start = Instant.now();
 		String startTime = Instant.now().toString();
 		this.sendMessage("Serializing Neo4j to Json");
+		 String startMsg = startTime + " started  serializing Neo4j.";
+		String out = this.gitPath 
+				+ this.gitlabGroup 
+				+ "/serializer.log"; 
+		try {
+			FileUtils.write(new File(out), startMsg + "\n");
+		} catch (IOException e) {
+		}
+
+		this.totalLinkCount = 0;
+		this.totalNodeCount = 0;
+		this.totalSkippedLinkCount = 0;
+		this.totalSkippedNodeCount = 0;
+		
 		 dbms = new Neo4jConnectionManager(
 				  url
 				  , user
@@ -125,12 +155,19 @@ public class Serializer implements Runnable {
 		 int total = this.librariesList.size();
 		 int processed = 0;
 		 
-		 if (this.reinit) {
-			 this.gitUtils.deleteAllProjectsInGroup(this.gitlabGroup + "/db2ares");
-			 this.gitUtils.deleteAllProjectsInGroup(this.gitlabGroup + "/db2json/gr_gr_cog");
-			 this.gitUtils.deleteAllProjectsInGroup(this.gitlabGroup + "/db2json/links");
-			 this.gitUtils.deleteAllProjectsInGroup(this.gitlabGroup + "/db2json/linkprops");
-			 this.gitUtils.deleteAllProjectsInGroup(this.gitlabGroup + "/db2json/nodes");
+		 if (this.reinit && this.pushEnabled) {
+			 if (this.db2aresEnabled) {
+				 this.gitUtils.deleteAllProjectsInGroup(this.gitlabGroup + "/db2ares");
+			 }
+			 if (this.db2jsonEnabled) {
+				 this.gitUtils.deleteAllProjectsInGroup(this.gitlabGroup + "/db2json/gr_gr_cog");
+				 this.gitUtils.deleteAllProjectsInGroup(this.gitlabGroup + "/db2json/links");
+				 this.gitUtils.deleteAllProjectsInGroup(this.gitlabGroup + "/db2json/linkprops");
+				 this.gitUtils.deleteAllProjectsInGroup(this.gitlabGroup + "/db2json/nodes");
+			 }
+			 if (this.db2csvEnabled) {
+				 this.gitUtils.deleteAllProjectsInGroup(this.gitlabGroup + "/db2csv");
+			 }
 		 }
 		 
 		 for (String library : this.librariesList) {
@@ -142,15 +179,51 @@ public class Serializer implements Runnable {
 
 			this.sendMessage(processed + " of " + total + " Neo4j to " + library + "." + this.getElapsedMessage(libStart));
 		 }
-		 String startMsg = startTime + " started  serializing Neo4j.";
+		 
+		 if (this.db2csvEnabled) {
+			 // convert json to csv
+			 this.preProcessLibrary(
+					 Constants.PROJECT_JSON2CSV
+					 , Constants.LIBRARY_CSV
+					 );
+			Json2Csv json2Csv = new Json2Csv(
+					this.gitPath + Constants.PROJECT_DB2JSON
+					, this.gitPath + Constants.PROJECT_JSON2CSV + "/" + Constants.LIBRARY_CSV
+					);
+			json2Csv.process();
+			if (this.pushEnabled) {
+				File libFile = new File(this.gitPath + Constants.PROJECT_JSON2CSV + "/" + Constants.LIBRARY_CSV);
+				if (libFile.exists()) {
+					gitUtils.gitAddCommitPush(
+							this.gitPath + Constants.PROJECT_JSON2CSV
+							, "olwsys"
+							, Constants.LIBRARY_CSV, "."
+							, Instant.now().toString() + ".Serialized." + this.getElapsedMessage(start)
+							);
+					logger.info("Pushed " + this.gitPath + Constants.PROJECT_JSON2CSV + "/" + Constants.LIBRARY_CSV + "." + Instant.now().toString() + ".Serialized." + this.getElapsedMessage(start));
+				}
+			} else {
+				logger.info("Simulated push " + this.gitPath + Constants.PROJECT_DB2JSON_LINGUISTICS_GR_GR_COG + Instant.now().toString() + ".Serialized." + this.getElapsedMessage(start));
+			}
+		 }
+
 		 String finishMsg = Instant.now().toString() + " finished serializing Neo4j." + this.getElapsedMessage(start);
 		this.sendMessage(startMsg);
 		this.sendMessage(finishMsg);
-		String out = this.gitPath 
-				+ this.gitlabGroup 
-				+ "/serializer.log"; 
 		try {
-			FileUtils.write(new File(out), startMsg + "\n" + finishMsg);
+			FileUtils.write(new File(out), startMsg 
+					+ "\n" 
+					+ finishMsg + "\n"
+					+ "total nodes: "
+					+ this.totalNodeCount
+					+ "\ntotal links: "
+					+ this.totalLinkCount
+					+ "\ntotal nodes skipped: "
+					+ this.totalSkippedNodeCount
+					+ "\ntotal links skipped: "
+					+ this.totalSkippedLinkCount
+					+ "\n"
+					);
 		} catch (IOException e) {
 		}
 
@@ -173,6 +246,7 @@ public class Serializer implements Runnable {
 		}
 		return elapsedMsg;
 	}
+	
 	private void sendMessage(String m) {
 		String msg = Instant.now().toString() + " " + m;
 		logger.info(msg);
@@ -188,19 +262,21 @@ public class Serializer implements Runnable {
 		}
 	}
 	private synchronized void processLibrary(String library, int libNbr, int totalLibs) {
-		if (! library.equals("en_sys_linguistics")) {
-			this.writeDb2ares(Constants.PROJECT_DB2ARES , library, libNbr, totalLibs);
+		if (this.db2aresEnabled) {
+			if (! library.equals("en_sys_linguistics")) {
+				this.writeDb2ares(Constants.PROJECT_DB2ARES , library, libNbr, totalLibs);
+				this.sleep();
+			}
+		}
+		if (this.db2jsonEnabled) {
+			this.writeNodes2Json(Constants.PROJECT_DB2JSON_NODES, library, libNbr, totalLibs);
 			this.sleep();
+			this.writeLinks2Json(Constants.PROJECT_DB2JSON_LINKS, library, libNbr, totalLibs);
+			this.sleep();
+			if (library.equals("gr_gr_cog")) {
+				this.writeLinkProps2Json(Constants.PROJECT_DB2JSON_LINK_PROPS, library, libNbr, totalLibs);
+			}
 		}
-		this.writeNodes2Json(Constants.PROJECT_DB2JSON_NODES, library, libNbr, totalLibs);
-		this.sleep();
-		this.writeLinks2Json(Constants.PROJECT_DB2JSON_LINKS, library, libNbr, totalLibs);
-		this.sleep();
-		if (library.equals("gr_gr_cog")) {
-			this.writeLinkProps2Json(Constants.PROJECT_DB2JSON_LINK_PROPS, library, libNbr, totalLibs);
-		}
-		this.sleep();
-		this.writeJson2csv(Constants.PROJECT_JSON2CSV, library, libNbr, totalLibs);
 	}
 	
 	/**
@@ -288,6 +364,7 @@ public class Serializer implements Runnable {
 			sb.append(library);
 			sb.append("' return distinct n._valueSchemaId as schema order by schema;");
 			ResultJsonObjectArray schemaResult = dbms.getForQuery(sb.toString());
+			// process all nodes by schema
 			for (JsonObject s : schemaResult.getValues()) {
 				if (s != null && s.has("schema")) {
 					String schema = s.get("schema").getAsString();
@@ -435,6 +512,7 @@ public class Serializer implements Runnable {
 											+ "/" + library 
 											+ "/" + label 
 											+ "/" + path;
+									this.totalNodeCount = (int) (this.totalNodeCount + topicSchemaResult.getValueCount());
 									FileUtils.write(new File(out),topicSchemaResult.getValuesAsJsonArray().toString());
 									if (this.debugEnabled) {
 										logger.info(Instant.now().toString() + " " + processed + " - " + out);
@@ -442,6 +520,8 @@ public class Serializer implements Runnable {
 								} catch (Exception e) {
 									ErrorUtils.report(logger, e);
 								}
+							} else {
+								this.totalSkippedNodeCount++;
 							}
 						}
 					}
@@ -518,6 +598,7 @@ public class Serializer implements Runnable {
 									+ "/" + topicPath 
 									+ "/" + topic + ".json";
 							try {
+								this.totalLinkCount = (int) (this.totalLinkCount + result.valueCount);
 								FileUtils.write(new File(out),result.getValuesAsJsonArray().toString());
 								if (this.debugEnabled) {
 									logger.info(Instant.now().toString() + " wrote links to "  + " - " + out);
@@ -526,10 +607,13 @@ public class Serializer implements Runnable {
 								ErrorUtils.report(logger, e);
 							}
 						} else {
+							this.totalSkippedNodeCount++;
 							logger.error("Unexpected libType parts length for " + libType);
 						}
 					}
 				}
+			} else {
+				this.totalSkippedNodeCount++;
 			}
 		 	logger.info(Instant.now().toString() + " db2json links finished processing " + library);
 		}
@@ -608,18 +692,6 @@ public class Serializer implements Runnable {
 			}
 	}
 
-	private synchronized void writeJson2csv(String groupPath, String library, int libNbr, int totalLibs) {
-	    Instant start = Instant.now();
-	 	logger.info(Instant.now().toString() + " Writing Link Properties to Json");
-		String fullPath = this.gitPath + Constants.PROJECT_DB2JSON_NODES + "/" + library;
-		for (File f : org.ocmc.ioc.liturgical.utils.FileUtils.getFilesFromSubdirectories(fullPath, "json")) {
-			try {
-			} catch (Exception e) {
-				ErrorUtils.report(logger, e);
-			}
-		}
-   }
-
 	private void preProcessLibrary(String group, String library) {
 		String fullPath = group + "/" + library;
 		File f = new File(this.gitPath + fullPath);
@@ -632,28 +704,38 @@ public class Serializer implements Runnable {
 					ErrorUtils.report(logger, e);
 				}
 			}
-			// delete cloud repo
-			if (this.gitUtils.existsProject(fullPath)) {
-				this.gitUtils.deleteProject(fullPath);
-				try {
-					Thread.sleep(3000); // give the server time to process the delete before we attempt to recreate the project
-				} catch (InterruptedException e) {
+			if (this.pushEnabled)  {
+				// delete cloud repo
+				if (this.gitUtils.existsProject(fullPath)) {
+					this.gitUtils.deleteProject(fullPath);
+					try {
+						Thread.sleep(3000); // give the server time to process the delete before we attempt to recreate the project
+					} catch (InterruptedException e) {
+					}
 				}
 			}
 		}
-		if (f.exists()) {
-			gitUtils.pullGitlabProject(this.gitPath + group, this.repoDomain, group, library);
-			logger.info("Pulled " + this.gitPath + group + "/" + library);
+		if (this.pushEnabled) {
+			if (f.exists()) {
+				gitUtils.pullGitlabProject(this.gitPath + group, this.repoDomain, group, library);
+				logger.info("Pulled " + this.gitPath + group + "/" + library);
+			} else {
+				try {
+					FileUtils.forceMkdir(f.getParentFile());
+					if (! this.gitUtils.existsProject(group + "/" + library)) {
+						ResultJsonObjectArray createResult = this.gitUtils.postProject(group, library);
+						logger.info("Posted " + group + "/" + library);
+						logger.info(createResult.status.developerMessage);
+					}
+					gitUtils.cloneGitlabProject(this.gitPath + group, this.repoDomain, group, library);
+					logger.info("Cloned " + this.gitPath + group + "/" + library);
+				} catch (IOException e) {
+					ErrorUtils.report(logger, e);
+				}
+			}
 		} else {
 			try {
 				FileUtils.forceMkdir(f.getParentFile());
-				if (! this.gitUtils.existsProject(group + "/" + library)) {
-					ResultJsonObjectArray createResult = this.gitUtils.postProject(group, library);
-					logger.info("Posted " + group + "/" + library);
-					logger.info(createResult.status.developerMessage);
-				}
-				gitUtils.cloneGitlabProject(this.gitPath + group, this.repoDomain, group, library);
-				logger.info("Cloned " + this.gitPath + group + "/" + library);
 			} catch (IOException e) {
 				ErrorUtils.report(logger, e);
 			}

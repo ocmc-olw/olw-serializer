@@ -2,19 +2,18 @@ package org.ocmc.olw.serializer.utils;
 
 import java.io.File;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.TreeMap;
 
 import org.ocmc.ioc.liturgical.schemas.constants.SCHEMA_CLASSES;
-import org.ocmc.ioc.liturgical.schemas.models.MetaCsv;
 import org.ocmc.ioc.liturgical.schemas.models.ModelHelpers;
 import org.ocmc.ioc.liturgical.schemas.models.supers.LTKDb;
+import org.ocmc.ioc.liturgical.schemas.models.synch.GithubRepo;
 import org.ocmc.ioc.liturgical.utils.FileUtils;
-import org.ocmc.rest.client.GitlabRestClient;
-import org.ocmc.rest.client.RestInitializationException;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import com.google.gson.Gson;
 import com.google.gson.JsonArray;
@@ -31,6 +30,7 @@ import com.google.gson.JsonPrimitive;
  *
  */
 public class Json2Csv {
+	private static final Logger logger = LoggerFactory.getLogger(Json2Csv.class);
 
 	private String pathIn = "";
 	private String pathOut = "";
@@ -42,6 +42,7 @@ public class Json2Csv {
 	private Map<String,Map<String,String>> csvHeaderStringMap = new TreeMap<String,Map<String,String>>(); // for each header the key and key  data type
 	private Map<String,Map<String,Object>> csvHeaderObjectMap = new TreeMap<String,Map<String,Object>>();
 	private List<String> linkTypesSeen  = new ArrayList<String>();
+	private Map<String,String> idMap = new TreeMap<String,String>(); // the header string to be written out, retrieved by schema
 	private boolean debug = false;
 	private String genericLinkHeader = ":START_ID,:END_ID,:TYPE\n";
 	
@@ -71,32 +72,54 @@ public class Json2Csv {
 			int totalLines = lines.size();
 			for (String line : lines) {
 				linesProcessed++;
-				JsonArray array = parser.parse(line).getAsJsonArray();
+				JsonElement lineElement = parser.parse(line);
+				JsonArray array = new JsonArray();
+				if (lineElement.isJsonArray()) {
+					array = lineElement.getAsJsonArray();
+				} else {
+					array.add(lineElement.getAsJsonObject());
+				}
 				for (JsonElement ele : array) {
 					JsonObject o = ele.getAsJsonObject();
 					if (o.has("props")) { // this is a node
 						JsonObject p = o.get("props").getAsJsonObject();
 						nodeCount++;
 						LTKDb ltkDbClass = null;
-						ltkDbClass = SCHEMA_CLASSES.ltkDbForSchemaName(p.get("_valueSchemaId").getAsString());
-						String ltkDbSchema = ltkDbClass._valueSchemaId;
-						LTKDb record = 
-								 gson.fromJson(
-										p.toString()
-										, ltkDbClass.getClass()
-							);
-						String schema = ltkDbClass.getClass().getSimpleName();
-						String header = "";
-						if (! this.csvHeaderStringMap.containsKey(schema)) {
-							this.csvHeaderCountMap.put(schema, 1);
-							header = this.toCsvHeader(ltkDbClass);
-							this.nodeWriterPool.write(schema, header);
+						String schema = p.get("_valueSchemaId").getAsString();
+						ltkDbClass = SCHEMA_CLASSES.ltkDbForSchemaName(schema);
+						LTKDb record = null;
+						if (ltkDbClass == null) {
+							if (schema.startsWith("GithubRepo")) {
+								// ignore
+							} else {
+								logger.info("Can't find LTKDB for " + schema);
+							}
 						} else {
-							Integer i = this.csvHeaderCountMap.get(schema);
-							i++;
-							this.csvHeaderCountMap.put(schema, i);
+							record = 
+									 gson.fromJson(
+											p.toString()
+											, ltkDbClass.getClass()
+								);
+							String id = record.getId();
+							if (this.idMap.containsKey(id)) {
+								logger.error("duplicate id " + id + " found in " + f.getAbsolutePath());
+								logger.error("Also occurs in " + this.idMap.get(id));
+							} else {
+								this.idMap.put(id,f.getAbsolutePath());
+								String header = "";
+								schema = schema.substring(0, schema.length()-4);
+								if (! this.csvHeaderStringMap.containsKey(schema)) {
+									this.csvHeaderCountMap.put(schema, 1);
+									header = this.toCsvHeader(ltkDbClass);
+									this.nodeWriterPool.write(schema, header);
+								} else {
+									Integer i = this.csvHeaderCountMap.get(schema);
+									i++;
+									this.csvHeaderCountMap.put(schema, i);
+								}
+								this.nodeWriterPool.write(schema, this.toCsvContent(schema, record.fetchOntologyLabels(), record.toJsonObject()));
+							}
 						}
-						this.nodeWriterPool.write(schema, this.toCsvContent(schema, record.fetchOntologyLabels(), record.toJsonObject()));
 					} else if (o.has("from")){ // this is a relationship
 						relationshipCount++;
 						String type = o.get("type").getAsString();
@@ -115,7 +138,7 @@ public class Json2Csv {
 						otherCount++;
 					}
 				}
-				System.out.println(filesProcessed + ":" + totalFiles + ":" + linesProcessed + ":" + totalLines);
+				logger.info(filesProcessed + ":" + totalFiles + ":" + linesProcessed + ":" + totalLines);
 			}
 		}
 		StringBuffer config = new StringBuffer();
@@ -137,12 +160,12 @@ public class Json2Csv {
 
 		FileUtils.writeFile(this.pathOut + "import.config", config.toString());
 		for (Entry<String,Integer> entry : this.csvHeaderCountMap.entrySet()) {
-			System.out.println(entry.getKey() + ": "+ entry.getValue());
+			logger.info(entry.getKey() + ": "+ entry.getValue());
 		}
-		System.out.println("Total schemas: " + this.csvHeaderCountMap.size());
-		System.out.println("Nodes: " + nodeCount);
-		System.out.println("Relationships: " + relationshipCount);
-		System.out.println("Other (this is bad!): " + otherCount);
+		logger.info("Total schemas: " + this.csvHeaderCountMap.size());
+		logger.info("Nodes: " + nodeCount);
+		logger.info("Relationships: " + relationshipCount);
+		logger.info("Other (this is bad!): " + otherCount);
 	}
 	
 	private String toCsvHeader(LTKDb model) {
@@ -191,9 +214,9 @@ public class Json2Csv {
 			if (e.isJsonArray()) {
 				type = "string[]";
 			} else if (e.isJsonNull()) {
-				System.out.println("trouble");
+				logger.info("trouble");
 			} else if (e.isJsonObject()) {
-				System.out.println("trouble");
+				logger.info("trouble");
 			} else if (e.isJsonPrimitive()) {
 				JsonPrimitive jp = e.getAsJsonPrimitive();
 				if (jp.isString()) {
@@ -203,10 +226,10 @@ public class Json2Csv {
 				} else if (jp.isNumber()){
 					type = "double";
 				}  else {
-					System.out.println("trouble");
+					logger.info("trouble");
 				}
 			} else {
-				System.out.println("trouble");
+				logger.info("trouble");
 			}
 			map.put(key, type);
 		}
@@ -252,14 +275,13 @@ public class Json2Csv {
 			}
 			for (String key : objectKeys) {
 				if (! keyMap.containsKey(key)) {
-					System.out.println("Header key map does not have " + key);
+					logger.info("Header key map does not have " + key);
 				}
 			}
 		}
 		
 		String k = "id";
 		String p = o.get(k).getAsString();
-		this.debug = (p.equals("en_us_mcolburn~gr_gr_cog~me.m01.d06~meMA.Ode9C11.text~2018.09.03.T08.35.25"));
 		sbContent.append(this.q(p));
 		sbContent.append(delimiter);
 		o.remove(k);
@@ -340,9 +362,9 @@ public class Json2Csv {
 						sbDebug.append(array.toString() + "\n");
 					}
 				} else if (e.isJsonNull()) {
-					System.out.println("trouble");
+					logger.info("trouble");
 				} else if (e.isJsonObject()) {
-					System.out.println("trouble");
+					logger.info("trouble");
 				} else if (e.isJsonPrimitive()) {
 					JsonPrimitive jp = e.getAsJsonPrimitive();
 					if (jp.isString()) {
@@ -366,10 +388,10 @@ public class Json2Csv {
 							sbDebug.append(jp.toString() + "\n");
 						}
 					}  else {
-						System.out.println("trouble");
+						logger.info("trouble");
 					}
 				} else {
-					System.out.println("trouble");
+					logger.info("trouble");
 				}
 			}
 		}
@@ -377,9 +399,9 @@ public class Json2Csv {
 		sbContent.append(labels.replace("CreateForm", "").replaceAll(":", ";"));
 		sbContent.append("\n");
 		if (debug) {
-			System.out.println(schema);
-			System.out.println(this.csvHeadersMap.get(schema));
-			System.out.println(sbDebug.toString());
+			logger.info(schema);
+			logger.info(this.csvHeadersMap.get(schema));
+			logger.info(sbDebug.toString());
 		}
 		return sbContent.toString();
 	}

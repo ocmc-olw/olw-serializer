@@ -148,7 +148,10 @@ public class SerializerApp {
     		boolean debugEnabled = false;
     		boolean reinitEnabled = false;
     		boolean pushEnabled = true;
-
+    		boolean db2aresEnabled = true;
+    		boolean db2jsonEnabled = true;
+    		boolean db2csvEnabled = true;
+  
     		String propServiceEnabled = System.getenv("SERVICE_ENABLED");
     		if (propServiceEnabled != null && propServiceEnabled.toLowerCase().equals("false")) {
     			serviceEnabled = false;
@@ -177,6 +180,22 @@ public class SerializerApp {
     		} else {
     			messagingEnabled = false;
     		}
+
+       		String propDb2AresEnabled = System.getenv("DB2ARES_ENABLED");
+    		if (propDb2AresEnabled != null && propDb2AresEnabled.toLowerCase().equals("false")) {
+    			db2aresEnabled = false;
+    		}
+
+       		String propDb2JsonEnabled = System.getenv("DB2JSON_ENABLED");
+    		if (propDb2JsonEnabled != null && propDb2JsonEnabled.toLowerCase().equals("false")) {
+    			db2jsonEnabled = false;
+    		}
+
+       		String propDb2CsvEnabled = System.getenv("DB2CSV_ENABLED");
+    		if (propDb2CsvEnabled != null && propDb2CsvEnabled.toLowerCase().equals("false")) {
+    			db2csvEnabled = false;
+    		}
+
 
     		String strMessagingToken = System.getenv("MSG_TOKEN");
     		if (strMessagingToken == null) {
@@ -236,6 +255,9 @@ public class SerializerApp {
 	   									, repoUser
 	   									, repoToken
 	   									, pushDelay
+	   									, db2aresEnabled
+	   									, db2jsonEnabled
+	   									, db2csvEnabled
 	   									, debugEnabled
 	   									, reinitEnabled
 	   									, pushEnabled
