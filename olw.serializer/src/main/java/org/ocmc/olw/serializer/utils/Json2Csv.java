@@ -23,7 +23,7 @@ import com.google.gson.JsonParser;
 import com.google.gson.JsonPrimitive;
 
 /**
- * Converts db2json json files into db2cvs files.
+ * Converts db2json json files into json2cvs cvs files.
  * There is one file for each schema type.
  * 
  * @author mac002
@@ -31,7 +31,8 @@ import com.google.gson.JsonPrimitive;
  */
 public class Json2Csv {
 	private static final Logger logger = LoggerFactory.getLogger(Json2Csv.class);
-
+	private String createForm = "CreateForm:1.1";
+	private int createFormLength = createForm.length();
 	private String pathIn = "";
 	private String pathOut = "";
 	private StreamWriterPool nodeWriterPool = null;
@@ -95,6 +96,10 @@ public class Json2Csv {
 								logger.info("Can't find LTKDB for " + schema);
 							}
 						} else {
+//							// Problem: the Create class names return the db version.  What happens if convert to db version?
+//							if (! ltkDbClass.getClass().getSimpleName().equals(schema)) {
+//								schema = ltkDbClass.getClass().getSimpleName();
+//							}
 							record = 
 									 gson.fromJson(
 											p.toString()
@@ -107,7 +112,11 @@ public class Json2Csv {
 							} else {
 								this.idMap.put(id,f.getAbsolutePath());
 								String header = "";
-								schema = schema.substring(0, schema.length()-4);
+								if (schema.endsWith(this.createForm)) {
+									schema = schema.substring(0, schema.length() - this.createFormLength);
+								} else {
+									schema = schema.substring(0, schema.length()-4);
+								}
 								if (! this.csvHeaderStringMap.containsKey(schema)) {
 									this.csvHeaderCountMap.put(schema, 1);
 									header = this.toCsvHeader(ltkDbClass);
@@ -263,6 +272,9 @@ public class Json2Csv {
 		StringBuffer sbContent = new StringBuffer();
 		Map<String,String> keyMap = this.csvHeaderStringMap.get(schema);
 		Map<String,Object> hashMap = this.csvHeaderObjectMap.get(schema);
+		if (keyMap == null) {
+			System.out.println("stop");
+		}
 		if (keyMap.size() != o.entrySet().size()) {
 			List<String> objectKeys = new ArrayList<String>();
 			for (Entry<String,JsonElement> entry : o.entrySet()) {
