@@ -1,10 +1,7 @@
 package org.ocmc.olw.serializer;
 
 import java.io.File;
-import java.io.FileInputStream;
-import java.io.InputStream;
 import java.net.URISyntaxException;
-import java.util.Properties;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
@@ -19,6 +16,8 @@ import org.slf4j.LoggerFactory;
  * Serializes Neo4j nodes and relationships to json
  * and commits them to gitlab.liml.org.
  *
+ *11-20-2019 Serializer.java is for Gitlab.  SerializerGithub is for Github.
+ * We are now pushing to Github.
  */
 public class SerializerApp {
 	private static final Logger logger = LoggerFactory.getLogger(SerializerApp.class);
@@ -106,6 +105,16 @@ public class SerializerApp {
     			whereSchemas = "";
     		}
 
+    		String texLibraries = System.getenv("TEX_LIBRARIES");
+    		if (texLibraries == null) {
+    			texLibraries = "";
+    		}
+
+    		String texRealms = System.getenv("TEX_REALMS");
+    		if (texRealms == null) {
+    			texRealms = "";
+    		}
+
     		int initialDelay       = 1;
     		int period               = 4;
     		try {
@@ -151,6 +160,7 @@ public class SerializerApp {
     		boolean db2aresEnabled = true;
     		boolean db2jsonEnabled = true;
     		boolean db2csvEnabled = true;
+    		boolean db2texEnabled = true;
   
     		String propServiceEnabled = System.getenv("SERVICE_ENABLED");
     		if (propServiceEnabled != null && propServiceEnabled.toLowerCase().equals("false")) {
@@ -194,6 +204,11 @@ public class SerializerApp {
        		String propDb2CsvEnabled = System.getenv("DB2CSV_ENABLED");
     		if (propDb2CsvEnabled != null && propDb2CsvEnabled.toLowerCase().equals("false")) {
     			db2csvEnabled = false;
+    		}
+
+       		String propDb2TexEnabled = System.getenv("DB2TEX_ENABLED");
+    		if (propDb2TexEnabled != null && propDb2TexEnabled.toLowerCase().equals("false")) {
+    			db2texEnabled = false;
     		}
 
 
@@ -242,7 +257,7 @@ public class SerializerApp {
 	       			
 	       			if (serviceEnabled) {
 	   					executorService.scheduleAtFixedRate(
-	   							new Serializer(
+	   							new SerializerGithub(
 	   									db_usr
 	   									, db_pwd
 	   									, db_url 
@@ -254,10 +269,13 @@ public class SerializerApp {
 	   									, repoDomain
 	   									, repoUser
 	   									, repoToken
+	   									, texLibraries
+	   									, texRealms
 	   									, pushDelay
 	   									, db2aresEnabled
 	   									, db2jsonEnabled
 	   									, db2csvEnabled
+	   									, db2texEnabled
 	   									, debugEnabled
 	   									, reinitEnabled
 	   									, pushEnabled

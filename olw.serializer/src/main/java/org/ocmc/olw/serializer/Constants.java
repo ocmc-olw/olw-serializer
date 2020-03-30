@@ -1,7 +1,7 @@
 package org.ocmc.olw.serializer;
 
 public class Constants {
-	public static String VERSION = "2018.09.27.1";
+	public static String VERSION = "2020.03.30.1";
 	public static final String LIBRARY_CSV = "csv";
 	public static final String PROJECT_DB2ARES = "serialized/db2ares";
 	public static final String PROJECT_DB2JSON = "serialized/db2json";
@@ -14,6 +14,7 @@ public class Constants {
 	public static final String PROJECT_DB2JSON_LINGUISTICS_PERSEUS = PROJECT_DB2JSON_LINGUISTICS + "/perseus";
 	public static final String PROJECT_DB2JSON_LINGUISTICS_INFLECTED = PROJECT_DB2JSON_LINGUISTICS + "/inflected";
 	public static final String PROJECT_DB2JSON_LINGUISTICS_PARSES = PROJECT_DB2JSON_LINGUISTICS + "/parses";
+	public static final String PROJECT_DB2TEX = "serialized/db2tex";
 	public static final String GIT_FOLDER = "/private/var/lib/gitlab/";  
 	public static final String GIT_USER_NAME = "olwsys";
 	public static final String GIT_USER_EMAIL = "olw@ocmc.org";

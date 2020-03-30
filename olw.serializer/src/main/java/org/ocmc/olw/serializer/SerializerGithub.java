@@ -13,8 +13,6 @@ import org.ocmc.ioc.liturgical.schemas.id.managers.IdManager;
 import org.ocmc.ioc.liturgical.schemas.models.ws.response.ResultJsonObjectArray;
 import org.ocmc.ioc.liturgical.utils.ErrorUtils;
 import org.ocmc.olw.serializer.utils.Json2Csv;
-import org.ocmc.rest.client.GitlabRestClient;
-import org.ocmc.rest.client.RestInitializationException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -29,8 +27,8 @@ import net.ages.alwb.utils.core.datastores.neo4j.Neo4jConnectionManager;
  * @author mac002
  *
  */
-public class Serializer implements Runnable {
-	private static final Logger logger = LoggerFactory.getLogger(Serializer.class);
+public class SerializerGithub implements Runnable {
+	private static final Logger logger = LoggerFactory.getLogger(SerializerGithub.class);
 	String user = null;
 	String pwd = null;
 	String url = null;
@@ -52,7 +50,6 @@ public class Serializer implements Runnable {
 	String repoUser = "";
 	String repoDomain = "";
 	private Neo4jConnectionManager dbms = null;
-	private GitlabRestClient gitUtils = null;
 	private List<String> librariesList = new ArrayList<String>();
 	private List<String> schemasList = new ArrayList<String>();
 	int pushDelay = 30000;  // 60000 = 1 minute
@@ -64,7 +61,7 @@ public class Serializer implements Runnable {
 	private List<String> texLibraries = new ArrayList<String>();
 	private List<String> texRealms = new ArrayList<String>();
 
-	public Serializer(
+	public SerializerGithub(
 			String user
 			, String pwd
 			, String url
@@ -97,11 +94,6 @@ public class Serializer implements Runnable {
 		}
 		this.gitPath = Constants.GIT_FOLDER;
 		this.pushDelay = pushDelay;
-		try {
-			this.gitUtils = new GitlabRestClient(repoDomain,repoToken);
-		} catch (RestInitializationException e) {
-			ErrorUtils.report(logger, e);
-		}
 		this.whereLibraryClause = whereLibraryClause;
 		this.whereLibraries = whereLibraries;
 		this.whereSchemaClause = whereSchemaClause;
@@ -166,14 +158,14 @@ public class Serializer implements Runnable {
 		Instant start = Instant.now();
 		String startTime = Instant.now().toString();
 		this.sendMessage("Serializing Neo4j to Json");
-	 String startMsg = startTime + " started  serializing Neo4j.";
+		 String startMsg = startTime + " started  serializing Neo4j.";
 		String out = this.gitPath 
 				+ this.gitlabGroup 
 				+ "/serializer.log"; 
-//		try {
-//			FileUtils.write(new File(out), startMsg + "\n");
-//		} catch (IOException e) {
-//		}
+		try {
+			FileUtils.write(new File(out), startMsg + "\n");
+		} catch (IOException e) {
+		}
 
 		this.totalLinkCount = 0;
 		this.totalNodeCount = 0;
@@ -190,25 +182,7 @@ public class Serializer implements Runnable {
 
 		 int total = this.librariesList.size();
 		 int processed = 0;
-		 
-		 if (this.reinit && this.pushEnabled) {
-			 if (this.db2aresEnabled) {
-				 this.gitUtils.deleteAllProjectsInGroup(this.gitlabGroup + "/db2ares");
-			 }
-			 if (this.db2jsonEnabled) {
-				 this.gitUtils.deleteAllProjectsInGroup(this.gitlabGroup + "/db2json/gr_gr_cog");
-				 this.gitUtils.deleteAllProjectsInGroup(this.gitlabGroup + "/db2json/links");
-				 this.gitUtils.deleteAllProjectsInGroup(this.gitlabGroup + "/db2json/linkprops");
-				 this.gitUtils.deleteAllProjectsInGroup(this.gitlabGroup + "/db2json/nodes");
-			 }
-			 if (this.db2csvEnabled) {
-				 this.gitUtils.deleteAllProjectsInGroup(this.gitlabGroup + "/db2csv");
-			 }
-			 if (this.db2texEnabled) {
-				 this.gitUtils.deleteAllProjectsInGroup(this.gitlabGroup + "/db2tex");
-			 }
-		 }
-		 
+		 		 
 		 for (String library : this.librariesList) {
 			Instant libStart = Instant.now();
 			processed++;
@@ -230,24 +204,10 @@ public class Serializer implements Runnable {
 					, this.gitPath + Constants.PROJECT_JSON2CSV + "/" + Constants.LIBRARY_CSV
 					);
 			json2Csv.process();
-			if (this.pushEnabled) {
-				File libFile = new File(this.gitPath + Constants.PROJECT_JSON2CSV + "/" + Constants.LIBRARY_CSV);
-				if (libFile.exists()) {
-					gitUtils.gitAddCommitPush(
-							this.gitPath + Constants.PROJECT_JSON2CSV
-							, "olwsys"
-							, Constants.LIBRARY_CSV, "."
-							, Instant.now().toString() + ".Serialized." + this.getElapsedMessage(start)
-							);
-					logger.info("Pushed " + this.gitPath + Constants.PROJECT_JSON2CSV + "/" + Constants.LIBRARY_CSV + "." + Instant.now().toString() + ".Serialized." + this.getElapsedMessage(start));
-				}
-			} else {
-				logger.info("Simulated push " + this.gitPath + Constants.PROJECT_DB2JSON_LINGUISTICS_GR_GR_COG + Instant.now().toString() + ".Serialized." + this.getElapsedMessage(start));
-			}
 		 }
 
 		 String finishMsg = Instant.now().toString() + " finished serializing Neo4j." + this.getElapsedMessage(start);
-//		this.sendMessage(startMsg);
+		this.sendMessage(startMsg);
 		this.sendMessage(finishMsg);
 		try {
 			FileUtils.write(new File(out), startMsg 
@@ -263,6 +223,17 @@ public class Serializer implements Runnable {
 					+ this.totalSkippedLinkCount
 					+ "\n"
 					);
+			try {
+				String saveit = "saveit";
+				if (! this.gitPath.endsWith("/")) {
+					saveit = "/" + saveit;
+				}
+				String[] command = {this.gitPath  + saveit};
+				ProcessBuilder p = new ProcessBuilder(command);
+				p.start(); 
+			} catch (Exception e) {
+			   System.out.println(e.getMessage());
+			}
 		} catch (IOException e) {
 		}
 
@@ -572,23 +543,7 @@ public class Serializer implements Runnable {
 					}
 				}
 			}
-			if (this.pushEnabled) {
-				File libFile = new File(this.gitPath + groupPath + "/" + library);
-				if (libFile.exists()) {
-					this.gitUtils.gitAddCommitPush(
-							this.gitPath + groupPath
-							, "olwsys"
-							, library
-							, "."
-							, Instant.now().toString() + ".Serialized nodes to json." + this.getElapsedMessage(start)
-							);
-					logger.info("Pushed " + this.gitPath + groupPath + "/" + library + "." + Instant.now().toString() + ".Serialized." + this.getElapsedMessage(start));
-				}
-			} else {
-				logger.info("Simulated push " + this.gitPath + groupPath + Instant.now().toString() + ".Serialized nodes to json." + this.getElapsedMessage(start));
-			}
-		 	logger.info(Instant.now().toString() + " db2json nodes finished processing " + library);
-		}
+	}
 	
 	/**
 	 * Writes links to a single json file
@@ -663,21 +618,6 @@ public class Serializer implements Runnable {
 		 	logger.info(Instant.now().toString() + " db2json links finished processing " + library);
 		}
 		
-		if (this.pushEnabled) {
-			File libFile = new File(this.gitPath + groupPath + "/" + library);
-			if (libFile.exists()) {
-				gitUtils.gitAddCommitPush(
-						this.gitPath + groupPath
-						, "olwsys"
-						, library
-						, "."
-						, Instant.now().toString() + ".Serialized." + this.getElapsedMessage(start)
-						);
-				logger.info("Pushed " + this.gitPath + groupPath + "/" + library + "." + Instant.now().toString() + ".Serialized." + this.getElapsedMessage(start));
-			}
-		} else {
-			logger.info("Simulated push " + this.gitPath + groupPath + Instant.now().toString() + ".Serialized." + this.getElapsedMessage(start));
-		}
 	}
 	
 	/**
@@ -708,28 +648,6 @@ public class Serializer implements Runnable {
 								FileUtils.write(new File(out),props.toString());
 							}
 						}
-						if (this.pushEnabled) {
-							File libFile = new File(this.gitPath + groupPath + "/" + library);
-							if (libFile.exists()) {
-								this.gitUtils.gitAddCommitPush(
-										this.gitPath 
-										+ groupPath
-										, "olwsys"
-										, library
-										, "."
-										, Instant.now().toString() + ".Serializer." + type + "."  + this.getElapsedMessage(start)
-										);
-								logger.info("Pushed " + this.gitPath + groupPath + "/" + library + "." + Instant.now().toString() + ".Serialized." + this.getElapsedMessage(start));
-							}
-						} else {
-							logger.info("Simulated push " 
-									+ this.gitPath 
-									+ groupPath
-									+ Instant.now().toString() 
-									+ ".Serializer." + type + "."  
-									+ this.getElapsedMessage(start)
-									);
-						}
 					}
 				} catch (Exception e) {
 					ErrorUtils.report(logger, e);
@@ -749,41 +667,11 @@ public class Serializer implements Runnable {
 					ErrorUtils.report(logger, e);
 				}
 			}
-			if (this.pushEnabled)  {
-				// delete cloud repo
-				if (this.gitUtils.existsProject(fullPath)) {
-					this.gitUtils.deleteProject(fullPath);
-					try {
-						Thread.sleep(3000); // give the server time to process the delete before we attempt to recreate the project
-					} catch (InterruptedException e) {
-					}
-				}
-			}
 		}
-		if (this.pushEnabled) {
-			if (f.exists()) {
-				gitUtils.pullGitlabProject(this.gitPath + group, this.repoDomain, group, library);
-				logger.info("Pulled " + this.gitPath + group + "/" + library);
-			} else {
-				try {
-					FileUtils.forceMkdir(f.getParentFile());
-					if (! this.gitUtils.existsProject(group + "/" + library)) {
-						ResultJsonObjectArray createResult = this.gitUtils.postProject(group, library);
-						logger.info("Posted " + group + "/" + library);
-						logger.info(createResult.status.developerMessage);
-					}
-					gitUtils.cloneGitlabProject(this.gitPath + group, this.repoDomain, group, library);
-					logger.info("Cloned " + this.gitPath + group + "/" + library);
-				} catch (IOException e) {
-					ErrorUtils.report(logger, e);
-				}
-			}
-		} else {
-			try {
-				FileUtils.forceMkdir(f.getParentFile());
-			} catch (IOException e) {
-				ErrorUtils.report(logger, e);
-			}
+		try {
+			FileUtils.forceMkdir(f.getParentFile());
+		} catch (IOException e) {
+			ErrorUtils.report(logger, e);
 		}
 	}
 	/**
@@ -928,20 +816,6 @@ public class Serializer implements Runnable {
 							+ " " + library + "~" + topic
 							);
 				}
-			}
-			if (this.pushEnabled) {
-				File libFile = new File(this.gitPath + groupPathAres + "/" + library);
-				if (libFile.exists()) {
-					gitUtils.gitAddCommitPush(
-							this.gitPath + groupPathAres
-							, "olwsys"
-							, library, "."
-							, Instant.now().toString() + ".Serialized." + this.getElapsedMessage(start)
-							);
-					logger.info("Pushed " + this.gitPath + groupPathAres + "/" + library + "." + Instant.now().toString() + ".Serialized." + this.getElapsedMessage(start));
-				}
-			} else {
-				logger.info("Simulated push " + this.gitPath + groupPathAres + Instant.now().toString() + ".Serialized." + this.getElapsedMessage(start));
 			}
 		} catch (Exception e) {
 			ErrorUtils.report(logger, e);
