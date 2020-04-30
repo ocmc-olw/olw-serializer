@@ -1,7 +1,7 @@
 package org.ocmc.olw.serializer;
 
 public class Constants {
-	public static String VERSION = "2020.03.30.1";
+	public static String VERSION = "2020.04.02.4";
 	public static final String LIBRARY_CSV = "csv";
 	public static final String PROJECT_DB2ARES = "serialized/db2ares";
 	public static final String PROJECT_DB2JSON = "serialized/db2json";

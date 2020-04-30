@@ -2,6 +2,8 @@ package org.ocmc.olw.serializer;
 
 import java.io.File;
 import java.net.URISyntaxException;
+import java.util.Calendar;
+import java.util.Date;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
@@ -17,7 +19,7 @@ import org.slf4j.LoggerFactory;
  * and commits them to gitlab.liml.org.
  *
  *11-20-2019 Serializer.java is for Gitlab.  SerializerGithub is for Github.
- * We are now pushing to Github.
+ * 04-01-2020 Using SerializerGithub, but saveit shell script pushes to Gitlab.
  */
 public class SerializerApp {
 	private static final Logger logger = LoggerFactory.getLogger(SerializerApp.class);
@@ -55,7 +57,6 @@ public class SerializerApp {
 	 */
 	public static void main( String[] args ) {
     	try {
-
     		/**
     		 * Read in the environmental variables.  
     		 */
@@ -64,6 +65,11 @@ public class SerializerApp {
     		String db_url =         System.getenv("DB_URL");
        		
     		String gitlabGroup =         System.getenv("GITLAB_GROUP");
+  
+    		// these next 3 variables are used if running at a fixed time each day
+    		Calendar calendar = Calendar.getInstance();
+    		long startScheduler = 0;
+    		long stopScheduler = 0;
 
     		boolean badWhere = false;
        		
@@ -132,6 +138,14 @@ public class SerializerApp {
     		TimeUnit timeUnit = TimeUnit.HOURS;
     		if (unit != null) {
         		switch (unit) {
+        		case ("AM"): {
+        			timeUnit = TimeUnit.MILLISECONDS;
+        			break;
+        		}
+        		case ("PM"): {
+        			timeUnit = TimeUnit.MILLISECONDS;
+        			break;
+        		}
         		case ("SECONDS"): {
         			timeUnit = TimeUnit.SECONDS;
         			break;
@@ -146,6 +160,32 @@ public class SerializerApp {
         		}
     		}
 
+    		// if timeUnit is milliseconds we will run at a specific time each day.
+    		// In this case, we interpret period to mean the hour of the day.
+    		// The unit must be set to either AM or PM
+    		if (timeUnit == TimeUnit.MILLISECONDS) {
+				calendar.set(Calendar.HOUR, period);
+				calendar.set(Calendar.MINUTE, 0);
+				calendar.set(Calendar.SECOND, 0);
+				if (unit.equals("AM")) {
+					calendar.set(Calendar.AM_PM, Calendar.AM);
+				} else {
+					calendar.set(Calendar.AM_PM, Calendar.PM);
+				}
+				Long currentTime = new Date().getTime();
+				// if we are already past the time, set to start tomorrow
+				if (calendar.getTime().getTime() < currentTime) {
+					calendar.add(Calendar.DATE, 1);
+				}
+				try {
+					initialDelay = (int) (calendar.getTime().getTime() - currentTime);
+					// allow the task 4 hours to run.  Normally takes just 1.
+					calendar.add(Calendar.HOUR, 4);
+					period = (int) (calendar.getTime().getTime() - currentTime);
+				} catch (Exception e) {
+					System.out.println(e.getStackTrace());
+				}
+    		}
     		int pushDelay       = 1;
     		try {
         		pushDelay = Integer.parseInt(System.getenv("PUSH_DELAY"));
@@ -161,6 +201,7 @@ public class SerializerApp {
     		boolean db2jsonEnabled = true;
     		boolean db2csvEnabled = true;
     		boolean db2texEnabled = true;
+    		boolean v4 = false;
   
     		String propServiceEnabled = System.getenv("SERVICE_ENABLED");
     		if (propServiceEnabled != null && propServiceEnabled.toLowerCase().equals("false")) {
@@ -206,11 +247,14 @@ public class SerializerApp {
     			db2csvEnabled = false;
     		}
 
+       		String propV4 = System.getenv("V4");
+    		if (propV4 != null && propV4.toLowerCase().equals("true")) {
+    			v4 = true;
+    		}
        		String propDb2TexEnabled = System.getenv("DB2TEX_ENABLED");
     		if (propDb2TexEnabled != null && propDb2TexEnabled.toLowerCase().equals("false")) {
     			db2texEnabled = false;
     		}
-
 
     		String strMessagingToken = System.getenv("MSG_TOKEN");
     		if (strMessagingToken == null) {
@@ -279,6 +323,7 @@ public class SerializerApp {
 	   									, debugEnabled
 	   									, reinitEnabled
 	   									, pushEnabled
+	   									, v4
 	   									)
 	   							, initialDelay
 	   							, period

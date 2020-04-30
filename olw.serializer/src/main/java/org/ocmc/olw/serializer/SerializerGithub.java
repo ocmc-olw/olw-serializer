@@ -44,6 +44,7 @@ public class SerializerGithub implements Runnable {
 	boolean db2csvEnabled = true;
 	boolean db2texEnabled = true;
 	boolean reinit = false;
+	boolean v4 = false;
 	File gitFolder = null;
 	String gitPath = "";
 	String repoToken = "";
@@ -83,6 +84,7 @@ public class SerializerGithub implements Runnable {
 			, boolean debugEnabled
 			, boolean reinit
 			, boolean pushEnabled
+			, boolean v4 // if db2csvEnabled, this controls whether output is for Neo4j 4.0
 			) {
 		this.user = user;
 		this.pwd = pwd;
@@ -107,6 +109,7 @@ public class SerializerGithub implements Runnable {
 		this.debugEnabled = debugEnabled;
 		this.reinit = reinit;
 		this.pushEnabled = pushEnabled;
+
 		this.loadSchemasList();
 		this.loadTexList(texLibraries, texRealms);
 	}
@@ -141,6 +144,7 @@ public class SerializerGithub implements Runnable {
 		}
 	}
 	private void loadSchemasList() {
+		this.schemasList = new ArrayList<String>();
 		try {
 			String [] parts = this.whereSchemas.split(",");
 			for (String schema : parts) {
@@ -162,10 +166,10 @@ public class SerializerGithub implements Runnable {
 		String out = this.gitPath 
 				+ this.gitlabGroup 
 				+ "/serializer.log"; 
-		try {
-			FileUtils.write(new File(out), startMsg + "\n");
-		} catch (IOException e) {
-		}
+//		try {
+//			FileUtils.write(new File(out), startMsg + "\n");
+//		} catch (IOException e) {
+//		}
 
 		this.totalLinkCount = 0;
 		this.totalNodeCount = 0;
@@ -202,6 +206,7 @@ public class SerializerGithub implements Runnable {
 			Json2Csv json2Csv = new Json2Csv(
 					this.gitPath + Constants.PROJECT_DB2JSON
 					, this.gitPath + Constants.PROJECT_JSON2CSV + "/" + Constants.LIBRARY_CSV
+					, this.v4
 					);
 			json2Csv.process();
 		 }
@@ -236,7 +241,10 @@ public class SerializerGithub implements Runnable {
 			}
 		} catch (IOException e) {
 		}
-
+		this.totalLinkCount = 0;
+		this.totalNodeCount = 0;
+		this.totalSkippedLinkCount = 0;
+		this.totalSkippedNodeCount = 0;		
 	}
 	
 	private String getElapsedMessage(Instant start) {
@@ -303,6 +311,7 @@ public class SerializerGithub implements Runnable {
 	 * 
 	 */
 	private void createLibrariesList() {
+		this.librariesList = new ArrayList<String>();
 	    StringBuffer sb = new StringBuffer();
 		sb.append("match (n:Root)");
 		if (this.whereLibraryClause.length() > 0 && this.whereLibraries.length() > 0) {

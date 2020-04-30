@@ -10,7 +10,6 @@ import java.util.TreeMap;
 import org.ocmc.ioc.liturgical.schemas.constants.SCHEMA_CLASSES;
 import org.ocmc.ioc.liturgical.schemas.models.ModelHelpers;
 import org.ocmc.ioc.liturgical.schemas.models.supers.LTKDb;
-import org.ocmc.ioc.liturgical.schemas.models.synch.GithubRepo;
 import org.ocmc.ioc.liturgical.utils.FileUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -45,14 +44,17 @@ public class Json2Csv {
 	private List<String> linkTypesSeen  = new ArrayList<String>();
 	private Map<String,String> idMap = new TreeMap<String,String>(); // the header string to be written out, retrieved by schema
 	private boolean debug = false;
+	private boolean v4 = false;
+	
 	private String genericLinkHeader = ":START_ID,:END_ID,:TYPE\n";
 	
-	public Json2Csv(String pathIn, String pathOut) {
+	public Json2Csv(String pathIn, String pathOut, boolean v4) {
 		this.pathIn = pathIn;
 		this.pathOut = pathOut;
 		if (! pathOut.endsWith("/")) {
 			this.pathOut = this.pathOut + "/";
 		}
+		this.v4 = v4;
 		this.nodeWriterPool = new StreamWriterPool(this.pathOut + "nodes/");
 		this.linkWriterPool = new StreamWriterPool(this.pathOut + "links/");
 	}
@@ -151,7 +153,9 @@ public class Json2Csv {
 			}
 		}
 		StringBuffer config = new StringBuffer();
-		config.append("--mode csv ");
+		if (! this.v4) {
+			config.append("--mode csv ");
+		}
 		for (String path : this.nodeWriterPool.getPaths()) {
 			config.append("--nodes ");
 			config.append(path);
@@ -162,7 +166,11 @@ public class Json2Csv {
 			config.append(path);
 			config.append(" ");
 		}
-		config.append(" --database graph.db");
+		if (this.v4) {
+			config.append(" --database neo4j");
+		} else {
+			config.append(" --database graph.db");
+		}
 		
 		this.nodeWriterPool.closeWriters();
 		this.linkWriterPool.closeWriters();
@@ -435,7 +443,9 @@ public class Json2Csv {
 	public static void main(String[] args) {
 		String dirIn = System.getenv("DIR_IN");
 		String dirOut = System.getenv("DIR_OUT");
-		Json2Csv json2Csv = new Json2Csv(dirIn, dirOut);
+		String isV4 = System.getenv("v4");
+		boolean v4 = isV4.equals("true");
+		Json2Csv json2Csv = new Json2Csv(dirIn, dirOut, v4);
 		json2Csv.process();
 	}
 

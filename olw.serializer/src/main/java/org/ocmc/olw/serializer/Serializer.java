@@ -45,6 +45,7 @@ public class Serializer implements Runnable {
 	boolean db2aresEnabled = true;
 	boolean db2csvEnabled = true;
 	boolean db2texEnabled = true;
+	boolean v4 = true;
 	boolean reinit = false;
 	File gitFolder = null;
 	String gitPath = "";
@@ -86,6 +87,7 @@ public class Serializer implements Runnable {
 			, boolean debugEnabled
 			, boolean reinit
 			, boolean pushEnabled
+			, boolean v4 // if db2csvEnabled, this indicates whether to output for Neo4j version 4.0
 			) {
 		this.user = user;
 		this.pwd = pwd;
@@ -228,6 +230,7 @@ public class Serializer implements Runnable {
 			Json2Csv json2Csv = new Json2Csv(
 					this.gitPath + Constants.PROJECT_DB2JSON
 					, this.gitPath + Constants.PROJECT_JSON2CSV + "/" + Constants.LIBRARY_CSV
+					, v4
 					);
 			json2Csv.process();
 			if (this.pushEnabled) {
